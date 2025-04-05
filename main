@@ -1561,3 +1561,112 @@ function TitanCX:CreateWindow(title)
             local satGradient = cacheObject("UIGradient", {
                 Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), button.BackgroundColor3),
                 Rotation = 0
+                local valGradient = cacheObject("UIGradient", {
+                    Color = ColorSequence.new(Color3.fromRGB(0, 0, 0), Color3.fromRGB(0, 0, 0)),
+                    Transparency = NumberSequence.new(1, 0),
+                    Rotation = 90,
+                    Parent = satVal
+                })
+
+                local hueDragging, satValDragging = false, false
+                hueBar.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                        hueDragging = true
+                    end
+                end)
+
+                hueBar.InputEnded:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                        hueDragging = false
+                    end
+                end)
+
+                satVal.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                        satValDragging = true
+                    end
+                end)
+
+                satVal.InputEnded:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                        satValDragging = false
+                    end
+                end)
+
+                local h, s, v = button.BackgroundColor3:ToHSV()
+                RunService.RenderStepped:Connect(function()
+                    if hueDragging then
+                        local mouseY = math.clamp(Mouse.Y - hueBar.AbsolutePosition.Y, 0, hueBar.AbsoluteSize.Y)
+                        h = 1 - (mouseY / hueBar.AbsoluteSize.Y)
+                        local color = Color3.fromHSV(h, s, v)
+                        satGradient.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), color)
+                        button.BackgroundColor3 = color
+                    end
+                    if satValDragging then
+                        local mouseX = math.clamp(Mouse.X - satVal.AbsolutePosition.X, 0, satVal.AbsoluteSize.X)
+                        local mouseY = math.clamp(Mouse.Y - satVal.AbsolutePosition.Y, 0, satVal.AbsoluteSize.Y)
+                        s = mouseX / satVal.AbsoluteSize.X
+                        v = 1 - (mouseY / satVal.AbsoluteSize.Y)
+                        local color = Color3.fromHSV(h, s, v)
+                        button.BackgroundColor3 = color
+                    end
+                end)
+
+                button.MouseButton1Click:Connect(function()
+                    picker.Visible = not picker.Visible
+                    TitanCX.Sounds.Click:Play()
+                end)
+
+                return picker
+            end
+
+            createPicker(bgColorPicker)
+            createPicker(accentColorPicker)
+            createPicker(textColorPicker)
+            createPicker(shadowColorPicker)
+
+            applyButton.MouseButton1Click:Connect(function()
+                TitanCX.Sounds.Click:Play()
+                createParticleEffect(Mouse)
+                createCustomTheme(
+                    nameBox.Text,
+                    bgColorPicker.BackgroundColor3,
+                    accentColorPicker.BackgroundColor3,
+                    textColorPicker.BackgroundColor3,
+                    shadowColorPicker.BackgroundColor3,
+                    Enum.Font[fontDropdown.Text],
+                    nil,
+                    nil,
+                    nil
+                )
+                themeFrame.Visible = false
+                window:CreateNotification("Theme Applied", "New theme '"..nameBox.Text.."' created and applied", 3, true)
+            end)
+
+            return themeFrame
+        end
+
+        -- Watermark
+        function window:UpdateWatermark(text)
+            TitanCX.Settings.WatermarkText = text
+            watermark.Text = text
+        end
+
+        -- Toggle Debug
+        function window:ToggleDebug()
+            debugFrame.Visible = not debugFrame.Visible
+            TitanCX.Sounds.Click:Play()
+        end
+
+        -- First Tab Activation
+        if #window.Tabs > 0 then
+            window.Tabs[1].Button:FindFirstChildOfClass("UIGradient").Enabled = true
+            window.Tabs[1].Content.Visible = true
+            tweenObject(window.Tabs[1].Button, {BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent}, 0.2)
+        end
+
+        return window
+    end
+
+    return TitanCX
+end
