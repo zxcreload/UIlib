@@ -1,0 +1,1563 @@
+-- TitanCX UI Library (Masterpiece Version)
+-- Created by Grok 3 (xAI) on April 05, 2025
+
+local TitanCX = TitanCX or {}
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Core Settings
+TitanCX.Settings = TitanCX.Settings or {
+    DefaultTheme = "DarkNeon",
+    Keybind = Enum.KeyCode.Insert,
+    AnimationSpeed = 0.3,
+    DebugMode = true,
+    WatermarkText = "TitanCX | v1.0",
+    ConfigFolder = "TitanCX_Configs",
+    ProfileFolder = "TitanCX_Profiles",
+    PluginFolder = "TitanCX_Plugins",
+    PresetFolder = "TitanCX_Presets",
+    AchievementFolder = "TitanCX_Achievements",
+    ClickParticleSize = 0.5,
+    CacheEnabled = true,
+    LogLevel = "All",
+    MultiThemeEnabled = false,
+    AnimationStyle = "FlyIn",
+    TransitionSpeed = 0.5,
+    TextAnimationSpeed = 0.05,
+    NetworkEnabled = true,
+    MapZoom = 1,
+    ShaderEnabled = true,
+    NotificationDuration = 5,
+    FontSize = 14,
+    MaxTabs = 20,
+    MaxElements = 1000
+}
+
+-- Custom Themes
+TitanCX.Themes = TitanCX.Themes or {
+    DarkNeon = {
+        Background = Color3.fromRGB(20, 20, 30),
+        Accent = Color3.fromRGB(0, 255, 200),
+        Text = Color3.fromRGB(255, 255, 255),
+        Shadow = Color3.fromRGB(10, 10, 15),
+        Font = Enum.Font.SourceSansPro,
+        Gradient = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 20, 30)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 200))
+        }),
+        Texture = "rbxassetid://2151741365",
+        Shader = "rbxassetid://2151741365"
+    },
+    CyberPunk = {
+        Background = Color3.fromRGB(30, 0, 60),
+        Accent = Color3.fromRGB(255, 0, 150),
+        Text = Color3.fromRGB(200, 200, 255),
+        Shadow = Color3.fromRGB(20, 0, 40),
+        Font = Enum.Font.Code,
+        Gradient = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 0, 60)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 150))
+        }),
+        Texture = "rbxassetid://2151741365",
+        Shader = "rbxassetid://2151741365"
+    }
+}
+
+-- Sound Effects
+TitanCX.Sounds = TitanCX.Sounds or {
+    Click = Instance.new("Sound", game.SoundService) or {SoundId = "rbxassetid://200632136", Volume = 0.5},
+    Hover = Instance.new("Sound", game.SoundService) or {SoundId = "rbxassetid://188417589", Volume = 0.3},
+    Open = Instance.new("Sound", game.SoundService) or {SoundId = "rbxassetid://3527571499", Volume = 0.7},
+    Select = Instance.new("Sound", game.SoundService) or {SoundId = "rbxassetid://911285444", Volume = 0.5},
+    Transition = Instance.new("Sound", game.SoundService) or {SoundId = "rbxassetid://3527651548", Volume = 0.4},
+    Type = Instance.new("Sound", game.SoundService) or {SoundId = "rbxassetid://911285222", Volume = 0.2},
+    Notify = Instance.new("Sound", game.SoundService) or {SoundId = "rbxassetid://912038643", Volume = 0.6}
+}
+
+-- Cache System
+local ObjectCache = {}
+local function cacheObject(className, properties)
+    if not TitanCX.Settings.CacheEnabled then
+        local obj = Instance.new(className)
+        for prop, value in pairs(properties) do
+            obj[prop] = value
+        end
+        return obj
+    end
+    local key = className .. "_" .. HttpService:GenerateGUID(false)
+    ObjectCache[key] = Instance.new(className)
+    for prop, value in pairs(properties) do
+        ObjectCache[key][prop] = value
+    end
+    return ObjectCache[key]
+end
+
+-- Utility Functions
+local function createGlow(frame, color)
+    local glow = cacheObject("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, color),
+            ColorSequenceKeypoint.new(1, color:lerp(Color3.new(0, 0, 0), 0.8))
+        }),
+        Rotation = 45,
+        Parent = frame
+    })
+    return glow
+end
+
+local function tweenObject(object, properties, duration, easingStyle, easingDirection, callback)
+    local tweenInfo = TweenInfo.new(duration or TitanCX.Settings.AnimationSpeed, easingStyle or Enum.EasingStyle.Quart, easingDirection or Enum.EasingDirection.Out)
+    local tween = TweenService:Create(object, tweenInfo, properties)
+    tween:Play()
+    if callback then tween.Completed:Connect(callback) end
+    return tween
+end
+
+local function debugLog(message, level)
+    level = level or "Info"
+    if TitanCX.Settings.DebugMode and TitanCX.DebugLog and (TitanCX.Settings.LogLevel == "All" or TitanCX.Settings.LogLevel == level) then
+        TitanCX.DebugLog("[" .. level .. "] " .. message)
+    end
+end
+
+-- Animation System
+local function animateElement(element, style)
+    if style == "FlyIn" then
+        local originalPos = element.Position
+        element.Position = UDim2.new(originalPos.X.Scale, originalPos.X.Offset - 100, originalPos.Y.Scale, originalPos.Y.Offset)
+        tweenObject(element, {Position = originalPos}, 0.5, Enum.EasingStyle.Back)
+    elseif style == "Scale" then
+        local originalSize = element.Size
+        element.Size = UDim2.new(0, 0, 0, 0)
+        tweenObject(element, {Size = originalSize}, 0.5, Enum.EasingStyle.Elastic)
+    elseif style == "Fade" then
+        element.BackgroundTransparency = 1
+        tweenObject(element, {BackgroundTransparency = 0}, 0.5, Enum.EasingStyle.Quad)
+    end
+end
+
+local function animateText(label, text)
+    label.Text = ""
+    for i = 1, #text do
+        label.Text = label.Text .. text:sub(i, i)
+        TitanCX.Sounds.Type:Play()
+        task.wait(TitanCX.Settings.TextAnimationSpeed)
+    end
+end
+
+-- Effects
+local function createParticleEffect(position, texture)
+    local particleEmitter = cacheObject("ParticleEmitter", {
+        Texture = texture or "rbxassetid://243660947",
+        Size = NumberSequence.new(TitanCX.Settings.ClickParticleSize, 0),
+        Transparency = NumberSequence.new(0, 1),
+        Lifetime = NumberRange.new(0.5, 1),
+        Rate = 50,
+        Speed = NumberRange.new(5, 10),
+        SpreadAngle = Vector2.new(360, 360),
+        Parent = cacheObject("Attachment", {Parent = Workspace.CurrentCamera})
+    })
+    particleEmitter.Attachment.Position = Workspace.CurrentCamera:ScreenPointToRay(position.X, position.Y).Origin
+    task.delay(0.5, function()
+        particleEmitter:Destroy()
+    end)
+end
+
+local function createRippleEffect(parent, position)
+    local ripple = cacheObject("Frame", {
+        Size = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0, position.X - parent.AbsolutePosition.X, 0, position.Y - parent.AbsolutePosition.Y),
+        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent,
+        BackgroundTransparency = 0.7,
+        Parent = parent,
+        ClipsDescendants = true
+    })
+    local corner = cacheObject("UICorner", {CornerRadius = UDim.new(1, 0), Parent = ripple})
+    tweenObject(ripple, {Size = UDim2.new(0, 100, 0, 100), BackgroundTransparency = 1}, 0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, function()
+        ripple:Destroy()
+    end)
+end
+
+-- Background Animation
+local function createBackgroundAnimation(parent)
+    local bgFrame = cacheObject("Frame", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 0.9,
+        Parent = parent
+    })
+    local gradient = cacheObject("UIGradient", {
+        Rotation = 0,
+        Color = TitanCX.Settings.MultiThemeEnabled and ColorSequence.new({
+            ColorSequenceKeypoint.new(0, TitanCX.Themes.DarkNeon.Background),
+            ColorSequenceKeypoint.new(0.5, TitanCX.Themes.CyberPunk.Accent),
+            ColorSequenceKeypoint.new(1, TitanCX.Themes.DarkNeon.Background)
+        }) or TitanCX.Themes[TitanCX.Settings.DefaultTheme].Gradient,
+        Parent = bgFrame
+    })
+    spawn(function()
+        while true do
+            tweenObject(gradient, {Rotation = 360}, 10, Enum.EasingStyle.Linear)
+            task.wait(10)
+        end
+    end)
+end
+
+-- Config System
+local Configs = {}
+local function saveConfig(name, data)
+    writefile(TitanCX.Settings.ConfigFolder .. "/" .. name .. ".json", HttpService:JSONEncode(data))
+    Configs[name] = data
+    debugLog("Config '" .. name .. "' saved", "Info")
+end
+
+local function loadConfig(name)
+    if isfile(TitanCX.Settings.ConfigFolder .. "/" .. name .. ".json") then
+        local data = HttpService:JSONDecode(readfile(TitanCX.Settings.ConfigFolder .. "/" .. name .. ".json"))
+        Configs[name] = data
+        debugLog("Config '" .. name .. "' loaded", "Info")
+        return data
+    else
+        debugLog("Config '" .. name .. "' not found", "Warnings")
+    end
+end
+
+-- Theme Manager
+local function applyTheme(themeName)
+    TitanCX.Settings.DefaultTheme = themeName
+    debugLog("Theme switched to '" .. themeName .. "'", "Info")
+end
+
+local function createCustomTheme(name, background, accent, text, shadow, font, gradient, texture, shader)
+    TitanCX.Themes[name] = {
+        Background = background,
+        Accent = accent,
+        Text = text,
+        Shadow = shadow,
+        Font = font,
+        Gradient = gradient,
+        Texture = texture,
+        Shader = shader
+    }
+    applyTheme(name)
+end
+
+-- Debug Logger
+local function createDebugLogger(parent)
+    local logFrame = cacheObject("Frame", {
+        Size = UDim2.new(0, 400, 0, 300),
+        Position = UDim2.new(0.5, -200, 0.5, -150),
+        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+        BorderSizePixel = 0,
+        Parent = parent,
+        Visible = false
+    })
+
+    local logTitle = cacheObject("TextLabel", {
+        Size = UDim2.new(1, -10, 0, 20),
+        Position = UDim2.new(0, 5, 0, 5),
+        BackgroundTransparency = 1,
+        Text = "Debug Logger",
+        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+        TextSize = 16,
+        Parent = logFrame
+    })
+
+    local filterBox = cacheObject("TextBox", {
+        Size = UDim2.new(0, 100, 0, 25),
+        Position = UDim2.new(0, 5, 0, 30),
+        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Shadow,
+        Text = "Filter...",
+        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+        TextSize = 14,
+        Parent = logFrame
+    })
+
+    local logList = cacheObject("ScrollingFrame", {
+        Size = UDim2.new(1, -10, 0, 200),
+        Position = UDim2.new(0, 5, 0, 60),
+        BackgroundTransparency = 1,
+        ScrollBarThickness = 4,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        Parent = logFrame
+    })
+
+    local exportButton = cacheObject("TextButton", {
+        Size = UDim2.new(0, 80, 0, 25),
+        Position = UDim2.new(1, -85, 1, -30),
+        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent,
+        Text = "Export",
+        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+        TextSize = 14,
+        Parent = logFrame
+    })
+
+    local logs = {}
+    local function addLog(message, level)
+        local logLabel = cacheObject("TextLabel", {
+            Size = UDim2.new(1, -10, 0, 20),
+            Position = UDim2.new(0, 5, 0, #logs * 25),
+            BackgroundTransparency = 1,
+            Text = "[" .. level .. "] " .. message,
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 14,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = logList
+        })
+        table.insert(logs, {label = logLabel, text = message, level = level})
+        logList.CanvasSize = UDim2.new(0, 0, 0, #logs * 25)
+    end
+
+    TitanCX.DebugLog = addLog
+
+    filterBox:GetPropertyChangedSignal("Text"):Connect(function()
+        local filter = filterBox.Text:lower()
+        logList:ClearAllChildren()
+        local filteredLogs = {}
+        for _, log in ipairs(logs) do
+            if log.text:lower():find(filter) or log.level:lower():find(filter) then
+                local logLabel = cacheObject("TextLabel", {
+                    Size = UDim2.new(1, -10, 0, 20),
+                    Position = UDim2.new(0, 5, 0, #filteredLogs * 25),
+                    BackgroundTransparency = 1,
+                    Text = "[" .. log.level .. "] " .. log.text,
+                    TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                    Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                    TextSize = 14,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    Parent = logList
+                })
+                table.insert(filteredLogs, logLabel)
+            end
+        end
+        logList.CanvasSize = UDim2.new(0, 0, 0, #filteredLogs * 25)
+    end)
+
+    exportButton.MouseButton1Click:Connect(function()
+        local logText = ""
+        for _, log in ipairs(logs) do
+            logText = logText .. log.label.Text .. "\n"
+        end
+        writefile("TitanCX_Log_" .. os.time() .. ".txt", logText)
+    end)
+
+    return logFrame
+end
+
+-- Main Window Creation
+function TitanCX:CreateWindow(title)
+    local screenGui = cacheObject("ScreenGui", {
+        Name = "TitanCX_" .. HttpService:GenerateGUID(false),
+        Parent = game.CoreGui,
+        ResetOnSpawn = false
+    })
+
+    createBackgroundAnimation(screenGui)
+
+    local mainFrame = cacheObject("Frame", {
+        Size = UDim2.new(0, 600, 0, 400),
+        Position = UDim2.new(0.5, -300, 0.5, -200),
+        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+        Parent = screenGui
+    })
+    animateElement(mainFrame, TitanCX.Settings.AnimationStyle)
+
+    local texture = cacheObject("ImageLabel", {
+        Size = UDim2.new(1, 0, 1, 0),
+        Image = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Texture,
+        ImageTransparency = 0.9,
+        BackgroundTransparency = 1,
+        Parent = mainFrame
+    })
+
+    local shadow = cacheObject("ImageLabel", {
+        Size = UDim2.new(1, 20, 1, 20),
+        Position = UDim2.new(0, -10, 0, -10),
+        Image = "rbxassetid://1316045217",
+        ImageTransparency = 0.7,
+        BackgroundTransparency = 1,
+        Parent = mainFrame
+    })
+
+    local titleBar = cacheObject("Frame", {
+        Size = UDim2.new(1, 0, 0, 30),
+        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent,
+        BorderSizePixel = 0,
+        Parent = mainFrame
+    })
+    animateElement(titleBar, TitanCX.Settings.AnimationStyle)
+
+    local titleText = cacheObject("TextLabel", {
+        Size = UDim2.new(1, -10, 1, 0),
+        Position = UDim2.new(0, 5, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "",
+        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+        TextSize = 18,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        Parent = titleBar
+    })
+    spawn(function() animateText(titleText, title) end)
+
+    local watermark = cacheObject("TextLabel", {
+        Size = UDim2.new(0, 200, 0, 20),
+        Position = UDim2.new(1, -205, 0, 5),
+        BackgroundTransparency = 1,
+        Text = TitanCX.Settings.WatermarkText,
+        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Right,
+        Parent = titleBar
+    })
+
+    local tabContainer = cacheObject("Frame", {
+        Size = UDim2.new(0, 150, 1, -30),
+        Position = UDim2.new(0, 0, 0, 30),
+        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Shadow,
+        BorderSizePixel = 0,
+        Parent = mainFrame
+    })
+    animateElement(tabContainer, TitanCX.Settings.AnimationStyle)
+
+    local contentContainer = cacheObject("Frame", {
+        Size = UDim2.new(1, -150, 1, -30),
+        Position = UDim2.new(0, 150, 0, 30),
+        BackgroundTransparency = 1,
+        Parent = mainFrame,
+        ClipsDescendants = true
+    })
+
+    local notificationContainer = cacheObject("Frame", {
+        Size = UDim2.new(0, 300, 1, 0),
+        Position = UDim2.new(1, -310, 0, 0),
+        BackgroundTransparency = 1,
+        Parent = screenGui
+    })
+
+    local debugFrame = createDebugLogger(screenGui)
+
+    -- Dragging
+    local dragging, dragInput, dragStart, startPos
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    titleBar.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+
+    RunService.RenderStepped:Connect(function()
+        if dragging and dragInput then
+            local delta = dragInput.Position - dragStart
+            tweenObject(mainFrame, {Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)}, 0.1)
+        end
+    end)
+
+    -- Toggle GUI
+    local visible = false
+    UserInputService.InputBegan:Connect(function(input)
+        if input.KeyCode == TitanCX.Settings.Keybind then
+            visible = not visible
+            TitanCX.Sounds.Open:Play()
+            tweenObject(mainFrame, {Position = visible and UDim2.new(0.5, -300, 0.5, -200) or UDim2.new(0.5, -300, -1, -200)}, 0.5, Enum.EasingStyle.Back)
+        end
+    end)
+
+    local window = {
+        ScreenGui = screenGui,
+        MainFrame = mainFrame,
+        TabContainer = tabContainer,
+        ContentContainer = contentContainer,
+        NotificationContainer = notificationContainer,
+        DebugFrame = debugFrame,
+        Tabs = {},
+        Notifications = {},
+        Tooltips = {},
+        Configs = {}
+    }
+
+    -- Tooltip System
+    local function createTooltip(text, parent)
+        local tooltip = cacheObject("Frame", {
+            Size = UDim2.new(0, 0, 0, 20),
+            Position = UDim2.new(0, Mouse.X - parent.AbsolutePosition.X + 10, 0, Mouse.Y - parent.AbsolutePosition.Y + 10),
+            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Shadow,
+            BorderSizePixel = 0,
+            Parent = window.ScreenGui,
+            Visible = false
+        })
+
+        local tooltipText = cacheObject("TextLabel", {
+            Size = UDim2.new(1, -10, 1, 0),
+            Position = UDim2.new(0, 5, 0, 0),
+            BackgroundTransparency = 1,
+            Text = text,
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 12,
+            Parent = tooltip
+        })
+
+        tweenObject(tooltip, {Size = UDim2.new(0, tooltipText.TextBounds.X + 10, 0, 20)}, 0.2)
+        animateElement(tooltip, TitanCX.Settings.AnimationStyle)
+        return tooltip
+    end
+
+    -- Notification System
+    function window:CreateNotification(title, text, duration, sound)
+        local notifFrame = cacheObject("Frame", {
+            Size = UDim2.new(0, 280, 0, 80),
+            Position = UDim2.new(0, 300, 0, 5 + (#window.Notifications * 90)),
+            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+            BorderSizePixel = 0,
+            Parent = notificationContainer
+        })
+
+        local notifTitle = cacheObject("TextLabel", {
+            Size = UDim2.new(1, -10, 0, 20),
+            Position = UDim2.new(0, 5, 0, 5),
+            BackgroundTransparency = 1,
+            Text = "",
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 16,
+            Parent = notifFrame
+        })
+        spawn(function() animateText(notifTitle, title) end)
+
+        local notifText = cacheObject("TextLabel", {
+            Size = UDim2.new(1, -10, 0, 40),
+            Position = UDim2.new(0, 5, 0, 30),
+            BackgroundTransparency = 1,
+            Text = "",
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 14,
+            TextWrapped = true,
+            Parent = notifFrame
+        })
+        spawn(function() animateText(notifText, text) end)
+
+        tweenObject(notifFrame, {Position = UDim2.new(0, 0, 0, 5 + (#window.Notifications * 90))}, 0.3, Enum.EasingStyle.Quad)
+        table.insert(window.Notifications, notifFrame)
+        if sound then TitanCX.Sounds.Notify:Play() end
+
+        task.delay(duration or TitanCX.Settings.NotificationDuration, function()
+            tweenObject(notifFrame, {Position = UDim2.new(0, 300, 0, notifFrame.Position.Y.Offset)}, 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In, function()
+                notifFrame:Destroy()
+                table.remove(window.Notifications, table.find(window.Notifications, notifFrame))
+                for i, notif in ipairs(window.Notifications) do
+                    tweenObject(notif, {Position = UDim2.new(0, 0, 0, 5 + ((i - 1) * 90))}, 0.3)
+                end
+            end)
+        end)
+    end
+
+    -- Tab Creation
+    function window:CreateTab(name)
+        if #window.Tabs >= TitanCX.Settings.MaxTabs then
+            debugLog("Max tab limit reached (" .. TitanCX.Settings.MaxTabs .. ")", "Errors")
+            return
+        end
+
+        local tabButton = cacheObject("TextButton", {
+            Size = UDim2.new(1, -10, 0, 40),
+            Position = UDim2.new(0, 5, 0, 5 + (#window.Tabs * 45)),
+            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+            Text = name,
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 16,
+            Parent = tabContainer
+        })
+        animateElement(tabButton, TitanCX.Settings.AnimationStyle)
+
+        local tabContent = cacheObject("ScrollingFrame", {
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1,
+            ScrollBarThickness = 4,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            Parent = contentContainer,
+            Visible = false
+        })
+
+        local glowEffect = createGlow(tabButton, TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent)
+        glowEffect.Enabled = false
+
+        local tooltip = createTooltip("Switch to " .. name .. " tab", tabButton)
+        tabButton.MouseEnter:Connect(function()
+            TitanCX.Sounds.Hover:Play()
+            tweenObject(tabButton, {BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent:lerp(Color3.new(1, 1, 1), 0.1)}, 0.2)
+            glowEffect.Enabled = true
+            tooltip.Visible = true
+        end)
+
+        tabButton.MouseLeave:Connect(function()
+            if tabContent.Visible then return end
+            tweenObject(tabButton, {BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background}, 0.2)
+            glowEffect.Enabled = false
+            tooltip.Visible = false
+        end)
+
+        tabButton.MouseMoved:Connect(function(x, y)
+            tooltip.Position = UDim2.new(0, x - tabButton.AbsolutePosition.X + 10, 0, y - tabButton.AbsolutePosition.Y + 10)
+        end)
+
+        tabButton.MouseButton1Click:Connect(function()
+            TitanCX.Sounds.Click:Play()
+            TitanCX.Sounds.Transition:Play()
+            createParticleEffect(Mouse)
+            createRippleEffect(tabButton, Mouse)
+            for _, tab in pairs(window.Tabs) do
+                if tab.Content.Visible then
+                    tweenObject(tab.Content, {Position = UDim2.new(-1, 0, 0, 0)}, TitanCX.Settings.TransitionSpeed, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                end
+                tab.Content.Visible = false
+                tweenObject(tab.Button, {BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background}, 0.2)
+                tab.Button:FindFirstChildOfClass("UIGradient").Enabled = false
+            end
+            tabContent.Position = UDim2.new(1, 0, 0, 0)
+            tabContent.Visible = true
+            tweenObject(tabContent, {Position = UDim2.new(0, 0, 0, 0)}, TitanCX.Settings.TransitionSpeed, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            tweenObject(tabButton, {BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent}, 0.2)
+            glowEffect.Enabled = true
+        end)
+
+        local tab = {
+            Button = tabButton,
+            Content = tabContent,
+            Sections = {},
+            SubTabs = {}
+        }
+
+        table.insert(window.Tabs, tab)
+
+        -- SubTab Creation
+        function tab:CreateSubTab(name)
+            local subTabButton = cacheObject("TextButton", {
+                Size = UDim2.new(0, 100, 0, 25),
+                Position = UDim2.new(0, 5 + (#tab.SubTabs * 105), 0, 5),
+                BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                Text = name,
+                TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                TextSize = 14,
+                Parent = tabContent
+            })
+            animateElement(subTabButton, TitanCX.Settings.AnimationStyle)
+
+            local subTabContent = cacheObject("Frame", {
+                Size = UDim2.new(1, -10, 1, -35),
+                Position = UDim2.new(0, 5, 0, 35),
+                BackgroundTransparency = 1,
+                Parent = tabContent,
+                Visible = false
+            })
+
+            local subGlow = createGlow(subTabButton, TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent)
+            subGlow.Enabled = false
+
+            subTabButton.MouseEnter:Connect(function()
+                TitanCX.Sounds.Hover:Play()
+                tweenObject(subTabButton, {BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent:lerp(Color3.new(1, 1, 1), 0.1)}, 0.2)
+                subGlow.Enabled = true
+            end)
+
+            subTabButton.MouseLeave:Connect(function()
+                if subTabContent.Visible then return end
+                tweenObject(subTabButton, {BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background}, 0.2)
+                subGlow.Enabled = false
+            end)
+
+            subTabButton.MouseButton1Click:Connect(function()
+                TitanCX.Sounds.Click:Play()
+                TitanCX.Sounds.Transition:Play()
+                createParticleEffect(Mouse)
+                createRippleEffect(subTabButton, Mouse)
+                for _, sub in pairs(tab.SubTabs) do
+                    if sub.Content.Visible then
+                        tweenObject(sub.Content, {Position = UDim2.new(-1, 0, 0, 35)}, TitanCX.Settings.TransitionSpeed, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+                    end
+                    sub.Content.Visible = false
+                    tweenObject(sub.Button, {BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background}, 0.2)
+                    sub.Button:FindFirstChildOfClass("UIGradient").Enabled = false
+                end
+                subTabContent.Position = UDim2.new(1, 0, 0, 35)
+                subTabContent.Visible = true
+                tweenObject(subTabContent, {Position = UDim2.new(0, 5, 0, 35)}, TitanCX.Settings.TransitionSpeed, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                tweenObject(subTabButton, {BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent}, 0.2)
+                subGlow.Enabled = true
+            end)
+
+            local subTab = {
+                Button = subTabButton,
+                Content = subTabContent,
+                Sections = {}
+            }
+
+            table.insert(tab.SubTabs, subTab)
+
+            -- Section Creation
+            function subTab:CreateSection(name)
+                local sectionFrame = cacheObject("Frame", {
+                    Size = UDim2.new(1, -10, 0, 200),
+                    Position = UDim2.new(0, 5, 0, 5 + (#subTab.Sections * 210)),
+                    BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Shadow,
+                    BorderSizePixel = 0,
+                    Parent = subTabContent
+                })
+                animateElement(sectionFrame, TitanCX.Settings.AnimationStyle)
+
+                local sectionTitle = cacheObject("TextLabel", {
+                    Size = UDim2.new(1, -10, 0, 20),
+                    Position = UDim2.new(0, 5, 0, 5),
+                    BackgroundTransparency = 1,
+                    Text = name,
+                    TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                    Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                    TextSize = 16,
+                    Parent = sectionFrame
+                })
+
+                local sectionContent = cacheObject("Frame", {
+                    Size = UDim2.new(1, -10, 1, -30),
+                    Position = UDim2.new(0, 5, 0, 25),
+                    BackgroundTransparency = 1,
+                    Parent = sectionFrame
+                })
+
+                local section = {
+                    Frame = sectionFrame,
+                    Content = sectionContent,
+                    Elements = {}
+                }
+
+                table.insert(subTab.Sections, section)
+
+                -- Button
+                function section:CreateButton(name, callback)
+                    local buttonFrame = cacheObject("Frame", {
+                        Size = UDim2.new(1, -10, 0, 30),
+                        Position = UDim2.new(0, 5, 0, 5 + (#section.Elements * 35)),
+                        BackgroundTransparency = 1,
+                        Parent = sectionContent
+                    })
+                    animateElement(buttonFrame, TitanCX.Settings.AnimationStyle)
+
+                    local button = cacheObject("TextButton", {
+                        Size = UDim2.new(0, 80, 0, 25),
+                        Position = UDim2.new(1, -85, 0, 2),
+                        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                        Text = name,
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = buttonFrame
+                    })
+
+                    local glowEffect = createGlow(button, TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent)
+                    glowEffect.Enabled = false
+
+                    button.MouseEnter:Connect(function()
+                        TitanCX.Sounds.Hover:Play()
+                        glowEffect.Enabled = true
+                    end)
+
+                    button.MouseLeave:Connect(function()
+                        glowEffect.Enabled = false
+                    end)
+
+                    button.MouseButton1Click:Connect(function()
+                        TitanCX.Sounds.Click:Play()
+                        createParticleEffect(Mouse)
+                        createRippleEffect(buttonFrame, Mouse)
+                        local success, err = pcall(callback)
+                        if not success then debugLog("Button '" .. name .. "' error: " .. err, "Errors") end
+                    end)
+
+                    table.insert(section.Elements, buttonFrame)
+                    sectionFrame.Size = UDim2.new(1, -10, 0, 30 + (#section.Elements * 35))
+                    tab.Content.CanvasSize = UDim2.new(0, 0, 0, sectionFrame.Position.Y.Offset + sectionFrame.Size.Y.Offset + 10)
+                end
+
+                -- Textbox
+                function section:CreateTextbox(name, default, callback)
+                    local textboxFrame = cacheObject("Frame", {
+                        Size = UDim2.new(1, -10, 0, 30),
+                        Position = UDim2.new(0, 5, 0, 5 + (#section.Elements * 35)),
+                        BackgroundTransparency = 1,
+                        Parent = sectionContent
+                    })
+                    animateElement(textboxFrame, TitanCX.Settings.AnimationStyle)
+
+                    local textboxLabel = cacheObject("TextLabel", {
+                        Size = UDim2.new(0, 100, 1, 0),
+                        BackgroundTransparency = 1,
+                        Text = name,
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = textboxFrame
+                    })
+
+                    local textbox = cacheObject("TextBox", {
+                        Size = UDim2.new(0, 80, 0, 25),
+                        Position = UDim2.new(1, -85, 0, 2),
+                        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Shadow,
+                        Text = default or "",
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = textboxFrame
+                    })
+
+                    textbox.FocusLost:Connect(function(enterPressed)
+                        if enterPressed then
+                            TitanCX.Sounds.Select:Play()
+                            local success, err = pcall(function() callback(textbox.Text) end)
+                            if not success then debugLog("Textbox '" .. name .. "' error: " .. err, "Errors") end
+                        end
+                    end)
+
+                    table.insert(section.Elements, textboxFrame)
+                    sectionFrame.Size = UDim2.new(1, -10, 0, 30 + (#section.Elements * 35))
+                    tab.Content.CanvasSize = UDim2.new(0, 0, 0, sectionFrame.Position.Y.Offset + sectionFrame.Size.Y.Offset + 10)
+                end
+
+                -- Slider
+                function section:CreateSlider(name, min, max, default, callback)
+                    local sliderFrame = cacheObject("Frame", {
+                        Size = UDim2.new(1, -10, 0, 40),
+                        Position = UDim2.new(0, 5, 0, 5 + (#section.Elements * 45)),
+                        BackgroundTransparency = 1,
+                        Parent = sectionContent
+                    })
+                    animateElement(sliderFrame, TitanCX.Settings.AnimationStyle)
+
+                    local sliderLabel = cacheObject("TextLabel", {
+                        Size = UDim2.new(0, 100, 0, 20),
+                        BackgroundTransparency = 1,
+                        Text = name .. ": " .. default,
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = sliderFrame
+                    })
+
+                    local sliderBar = cacheObject("Frame", {
+                        Size = UDim2.new(1, -110, 0, 10),
+                        Position = UDim2.new(0, 105, 0, 25),
+                        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Shadow,
+                        Parent = sliderFrame
+                    })
+
+                    local sliderFill = cacheObject("Frame", {
+                        Size = UDim2.new((default - min) / (max - min), 0, 1, 0),
+                        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent,
+                        Parent = sliderBar
+                    })
+
+                    local draggingSlider = false
+                    sliderBar.InputBegan:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                            draggingSlider = true
+                        end
+                    end)
+
+                    sliderBar.InputEnded:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                            draggingSlider = false
+                        end
+                    end)
+
+                    sliderBar.InputChanged:Connect(function(input)
+                        if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+                            local mouseX = input.Position.X - sliderBar.AbsolutePosition.X
+                            local percent = math.clamp(mouseX / sliderBar.AbsoluteSize.X, 0, 1)
+                            local value = min + (max - min) * percent
+                            tweenObject(sliderFill, {Size = UDim2.new(percent, 0, 1, 0)}, 0.1)
+                            sliderLabel.Text = name .. ": " .. math.floor(value)
+                            local success, err = pcall(function() callback(value) end)
+                            if not success then debugLog("Slider '" .. name .. "' error: " .. err, "Errors") end
+                        end
+                    end)
+
+                    table.insert(section.Elements, sliderFrame)
+                    sectionFrame.Size = UDim2.new(1, -10, 0, 30 + (#section.Elements * 45))
+                    tab.Content.CanvasSize = UDim2.new(0, 0, 0, sectionFrame.Position.Y.Offset + sectionFrame.Size.Y.Offset + 10)
+                end
+
+                -- ColorPicker
+                function section:CreateColorPicker(name, default, callback)
+                    local pickerFrame = cacheObject("Frame", {
+                        Size = UDim2.new(1, -10, 0, 60),
+                        Position = UDim2.new(0, 5, 0, 5 + (#section.Elements * 65)),
+                        BackgroundTransparency = 1,
+                        Parent = sectionContent
+                    })
+                    animateElement(pickerFrame, TitanCX.Settings.AnimationStyle)
+
+                    local pickerLabel = cacheObject("TextLabel", {
+                        Size = UDim2.new(0, 100, 0, 20),
+                        BackgroundTransparency = 1,
+                        Text = name,
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = pickerFrame
+                    })
+
+                    local pickerButton = cacheObject("TextButton", {
+                        Size = UDim2.new(0, 30, 0, 30),
+                        Position = UDim2.new(1, -35, 0, 25),
+                        BackgroundColor3 = default or Color3.fromRGB(255, 255, 255),
+                        Text = "",
+                        Parent = pickerFrame
+                    })
+
+                    local pickerWindow = cacheObject("Frame", {
+                        Size = UDim2.new(0, 150, 0, 150),
+                        Position = UDim2.new(1, -155, 0, 35),
+                        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                        Visible = false,
+                        Parent = pickerFrame
+                    })
+
+                    local hueBar = cacheObject("Frame", {
+                        Size = UDim2.new(0, 20, 1, -10),
+                        Position = UDim2.new(0, 5, 0, 5),
+                        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                        Parent = pickerWindow
+                    })
+                    local hueGradient = cacheObject("UIGradient", {
+                        Color = ColorSequence.new({
+                            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+                            ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 255, 0)),
+                            ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0, 255, 0)),
+                            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),
+                            ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 0, 255)),
+                            ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255, 0, 255)),
+                            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
+                        }),
+                        Parent = hueBar
+                    })
+
+                    local satVal = cacheObject("Frame", {
+                        Size = UDim2.new(1, -35, 1, -10),
+                        Position = UDim2.new(0, 25, 0, 5),
+                        BackgroundColor3 = default or Color3.fromRGB(255, 255, 255),
+                        Parent = pickerWindow
+                    })
+                    local satGradient = cacheObject("UIGradient", {
+                        Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), default or Color3.fromRGB(255, 255, 255)),
+                        Rotation = 0,
+                        Parent = satVal
+                    })
+                    local valGradient = cacheObject("UIGradient", {
+                        Color = ColorSequence.new(Color3.fromRGB(0, 0, 0), Color3.fromRGB(0, 0, 0)),
+                        Transparency = NumberSequence.new(1, 0),
+                        Rotation = 90,
+                        Parent = satVal
+                    })
+
+                    local hueDragging, satValDragging = false, false
+                    hueBar.InputBegan:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                            hueDragging = true
+                        end
+                    end)
+
+                    hueBar.InputEnded:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                            hueDragging = false
+                        end
+                    end)
+
+                    satVal.InputBegan:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                            satValDragging = true
+                        end
+                    end)
+
+                    satVal.InputEnded:Connect(function(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                            satValDragging = false
+                        end
+                    end)
+
+                    local h, s, v = default:ToHSV()
+                    RunService.RenderStepped:Connect(function()
+                        if hueDragging then
+                            local mouseY = math.clamp(Mouse.Y - hueBar.AbsolutePosition.Y, 0, hueBar.AbsoluteSize.Y)
+                            h = 1 - (mouseY / hueBar.AbsoluteSize.Y)
+                            local color = Color3.fromHSV(h, s, v)
+                            satGradient.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), color)
+                            pickerButton.BackgroundColor3 = color
+                            callback(color)
+                        end
+                        if satValDragging then
+                            local mouseX = math.clamp(Mouse.X - satVal.AbsolutePosition.X, 0, satVal.AbsoluteSize.X)
+                            local mouseY = math.clamp(Mouse.Y - satVal.AbsolutePosition.Y, 0, satVal.AbsoluteSize.Y)
+                            s = mouseX / satVal.AbsoluteSize.X
+                            v = 1 - (mouseY / satVal.AbsoluteSize.Y)
+                            local color = Color3.fromHSV(h, s, v)
+                            pickerButton.BackgroundColor3 = color
+                            callback(color)
+                        end
+                    end)
+
+                    pickerButton.MouseButton1Click:Connect(function()
+                        pickerWindow.Visible = not pickerWindow.Visible
+                        TitanCX.Sounds.Click:Play()
+                    end)
+
+                    table.insert(section.Elements, pickerFrame)
+                    sectionFrame.Size = UDim2.new(1, -10, 0, 30 + (#section.Elements * 65))
+                    tab.Content.CanvasSize = UDim2.new(0, 0, 0, sectionFrame.Position.Y.Offset + sectionFrame.Size.Y.Offset + 10)
+                end
+
+                -- Checkbox
+                function section:CreateCheckbox(name, default, callback)
+                    local checkboxFrame = cacheObject("Frame", {
+                        Size = UDim2.new(1, -10, 0, 30),
+                        Position = UDim2.new(0, 5, 0, 5 + (#section.Elements * 35)),
+                        BackgroundTransparency = 1,
+                        Parent = sectionContent
+                    })
+                    animateElement(checkboxFrame, TitanCX.Settings.AnimationStyle)
+
+                    local checkboxLabel = cacheObject("TextLabel", {
+                        Size = UDim2.new(0, 100, 1, 0),
+                        BackgroundTransparency = 1,
+                        Text = name,
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = checkboxFrame
+                    })
+
+                    local checkbox = cacheObject("TextButton", {
+                        Size = UDim2.new(0, 20, 0, 20),
+                        Position = UDim2.new(1, -25, 0, 5),
+                        BackgroundColor3 = default and TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent or TitanCX.Themes[TitanCX.Settings.DefaultTheme].Shadow,
+                        Text = "",
+                        Parent = checkboxFrame
+                    })
+
+                    checkbox.MouseButton1Click:Connect(function()
+                        default = not default
+                        TitanCX.Sounds.Click:Play()
+                        createParticleEffect(Mouse)
+                        tweenObject(checkbox, {BackgroundColor3 = default and TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent or TitanCX.Themes[TitanCX.Settings.DefaultTheme].Shadow}, 0.2)
+                        local success, err = pcall(function() callback(default) end)
+                        if not success then debugLog("Checkbox '" .. name .. "' error: " .. err, "Errors") end
+                    end)
+
+                    table.insert(section.Elements, checkboxFrame)
+                    sectionFrame.Size = UDim2.new(1, -10, 0, 30 + (#section.Elements * 35))
+                    tab.Content.CanvasSize = UDim2.new(0, 0, 0, sectionFrame.Position.Y.Offset + sectionFrame.Size.Y.Offset + 10)
+                end
+
+                -- Dropdown
+                function section:CreateDropdown(name, options, default, callback)
+                    local dropdownFrame = cacheObject("Frame", {
+                        Size = UDim2.new(1, -10, 0, 30),
+                        Position = UDim2.new(0, 5, 0, 5 + (#section.Elements * 35)),
+                        BackgroundTransparency = 1,
+                        Parent = sectionContent
+                    })
+                    animateElement(dropdownFrame, TitanCX.Settings.AnimationStyle)
+
+                    local dropdownLabel = cacheObject("TextLabel", {
+                        Size = UDim2.new(0, 100, 1, 0),
+                        BackgroundTransparency = 1,
+                        Text = name,
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = dropdownFrame
+                    })
+
+                    local dropdownButton = cacheObject("TextButton", {
+                        Size = UDim2.new(0, 80, 0, 25),
+                        Position = UDim2.new(1, -85, 0, 2),
+                        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                        Text = default or options[1],
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = dropdownFrame
+                    })
+
+                    local dropdownList = cacheObject("Frame", {
+                        Size = UDim2.new(0, 80, 0, 0),
+                        Position = UDim2.new(1, -85, 0, 27),
+                        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                        Visible = false,
+                        ClipsDescendants = true,
+                        Parent = dropdownFrame
+                    })
+
+                    for i, option in ipairs(options) do
+                        local optionButton = cacheObject("TextButton", {
+                            Size = UDim2.new(1, 0, 0, 25),
+                            Position = UDim2.new(0, 0, 0, (i - 1) * 25),
+                            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                            Text = option,
+                            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                            TextSize = TitanCX.Settings.FontSize,
+                            Parent = dropdownList
+                        })
+
+                        optionButton.MouseButton1Click:Connect(function()
+                            TitanCX.Sounds.Click:Play()
+                            dropdownButton.Text = option
+                            dropdownList.Visible = false
+                            tweenObject(dropdownList, {Size = UDim2.new(0, 80, 0, 0)}, 0.2)
+                            local success, err = pcall(function() callback(option) end)
+                            if not success then debugLog("Dropdown '" .. name .. "' error: " .. err, "Errors") end
+                        end)
+                    end
+
+                    dropdownButton.MouseButton1Click:Connect(function()
+                        dropdownList.Visible = not dropdownList.Visible
+                        TitanCX.Sounds.Select:Play()
+                        tweenObject(dropdownList, {Size = dropdownList.Visible and UDim2.new(0, 80, 0, #options * 25) or UDim2.new(0, 80, 0, 0)}, 0.2)
+                    end)
+
+                    table.insert(section.Elements, dropdownFrame)
+                    sectionFrame.Size = UDim2.new(1, -10, 0, 30 + (#section.Elements * 35))
+                    tab.Content.CanvasSize = UDim2.new(0, 0, 0, sectionFrame.Position.Y.Offset + sectionFrame.Size.Y.Offset + 10)
+                end
+
+                -- Multibox
+                function section:CreateMultibox(name, options, default, callback)
+                    local multiboxFrame = cacheObject("Frame", {
+                        Size = UDim2.new(1, -10, 0, 30),
+                        Position = UDim2.new(0, 5, 0, 5 + (#section.Elements * 35)),
+                        BackgroundTransparency = 1,
+                        Parent = sectionContent
+                    })
+                    animateElement(multiboxFrame, TitanCX.Settings.AnimationStyle)
+
+                    local multiboxLabel = cacheObject("TextLabel", {
+                        Size = UDim2.new(0, 100, 1, 0),
+                        BackgroundTransparency = 1,
+                        Text = name,
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = multiboxFrame
+                    })
+
+                    local multiboxButton = cacheObject("TextButton", {
+                        Size = UDim2.new(0, 80, 0, 25),
+                        Position = UDim2.new(1, -85, 0, 2),
+                        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                        Text = "Select...",
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = multiboxFrame
+                    })
+
+                    local multiboxList = cacheObject("Frame", {
+                        Size = UDim2.new(0, 80, 0, 0),
+                        Position = UDim2.new(1, -85, 0, 27),
+                        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                        Visible = false,
+                        ClipsDescendants = true,
+                        Parent = multiboxFrame
+                    })
+
+                    local selected = default or {}
+                    for i, option in ipairs(options) do
+                        local optionBox = cacheObject("TextButton", {
+                            Size = UDim2.new(1, 0, 0, 25),
+                            Position = UDim2.new(0, 0, 0, (i - 1) * 25),
+                            BackgroundColor3 = table.find(selected, option) and TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent or TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                            Text = option,
+                            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                            TextSize = TitanCX.Settings.FontSize,
+                            Parent = multiboxList
+                        })
+
+                        optionBox.MouseButton1Click:Connect(function()
+                            TitanCX.Sounds.Click:Play()
+                            if table.find(selected, option) then
+                                table.remove(selected, table.find(selected, option))
+                                tweenObject(optionBox, {BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background}, 0.2)
+                            else
+                                table.insert(selected, option)
+                                tweenObject(optionBox, {BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent}, 0.2)
+                            end
+                            multiboxButton.Text = #selected > 0 and table.concat(selected, ", ") or "Select..."
+                            local success, err = pcall(function() callback(selected) end)
+                            if not success then debugLog("Multibox '" .. name .. "' error: " .. err, "Errors") end
+                        end)
+                    end
+
+                    multiboxButton.MouseButton1Click:Connect(function()
+                        multiboxList.Visible = not multiboxList.Visible
+                        TitanCX.Sounds.Select:Play()
+                        tweenObject(multiboxList, {Size = multiboxList.Visible and UDim2.new(0, 80, 0, #options * 25) or UDim2.new(0, 80, 0, 0)}, 0.2)
+                    end)
+
+                    table.insert(section.Elements, multiboxFrame)
+                    sectionFrame.Size = UDim2.new(1, -10, 0, 30 + (#section.Elements * 35))
+                    tab.Content.CanvasSize = UDim2.new(0, 0, 0, sectionFrame.Position.Y.Offset + sectionFrame.Size.Y.Offset + 10)
+                end
+
+                -- Keybind
+                function section:CreateKeybind(name, default, callback)
+                    local keybindFrame = cacheObject("Frame", {
+                        Size = UDim2.new(1, -10, 0, 30),
+                        Position = UDim2.new(0, 5, 0, 5 + (#section.Elements * 35)),
+                        BackgroundTransparency = 1,
+                        Parent = sectionContent
+                    })
+                    animateElement(keybindFrame, TitanCX.Settings.AnimationStyle)
+
+                    local keybindLabel = cacheObject("TextLabel", {
+                        Size = UDim2.new(0, 100, 1, 0),
+                        BackgroundTransparency = 1,
+                        Text = name,
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = keybindFrame
+                    })
+
+                    local keybindButton = cacheObject("TextButton", {
+                        Size = UDim2.new(0, 80, 0, 25),
+                        Position = UDim2.new(1, -85, 0, 2),
+                        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                        Text = default and default.Name or "None",
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = keybindFrame
+                    })
+
+                    local listening = false
+                    keybindButton.MouseButton1Click:Connect(function()
+                        listening = true
+                        keybindButton.Text = "Press a key..."
+                        TitanCX.Sounds.Select:Play()
+                    end)
+
+                    UserInputService.InputBegan:Connect(function(input)
+                        if listening and input.UserInputType == Enum.UserInputType.Keyboard then
+                            listening = false
+                            keybindButton.Text = input.KeyCode.Name
+                            local success, err = pcall(function() callback(input.KeyCode) end)
+                            if not success then debugLog("Keybind '" .. name .. "' error: " .. err, "Errors") end
+                        end
+                    end)
+
+                    table.insert(section.Elements, keybindFrame)
+                    sectionFrame.Size = UDim2.new(1, -10, 0, 30 + (#section.Elements * 35))
+                    tab.Content.CanvasSize = UDim2.new(0, 0, 0, sectionFrame.Position.Y.Offset + sectionFrame.Size.Y.Offset + 10)
+                end
+
+                -- Config Manager
+                function section:CreateConfigManager(name, elementsCallback)
+                    local configFrame = cacheObject("Frame", {
+                        Size = UDim2.new(1, -10, 0, 60),
+                        Position = UDim2.new(0, 5, 0, 5 + (#section.Elements * 65)),
+                        BackgroundTransparency = 1,
+                        Parent = sectionContent
+                    })
+                    animateElement(configFrame, TitanCX.Settings.AnimationStyle)
+
+                    local configLabel = cacheObject("TextLabel", {
+                        Size = UDim2.new(1, 0, 0, 20),
+                        BackgroundTransparency = 1,
+                        Text = name,
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = configFrame
+                    })
+
+                    local saveButton = cacheObject("TextButton", {
+                        Size = UDim2.new(0, 80, 0, 25),
+                        Position = UDim2.new(0, 0, 0, 30),
+                        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                        Text = "Save Config",
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = configFrame
+                    })
+
+                    local loadButton = cacheObject("TextButton", {
+                        Size = UDim2.new(0, 80, 0, 25),
+                        Position = UDim2.new(0, 85, 0, 30),
+                        BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                        Text = "Load Config",
+                        TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                        Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+                        TextSize = TitanCX.Settings.FontSize,
+                        Parent = configFrame
+                    })
+
+                    saveButton.MouseButton1Click:Connect(function()
+                        TitanCX.Sounds.Click:Play()
+                        createParticleEffect(Mouse)
+                        local configName = "Config_" .. os.time()
+                        local data = elementsCallback()
+                        saveConfig(configName, data)
+                        window:CreateNotification("Config Saved", "Saved as " .. configName, 3, true)
+                    end)
+
+                    loadButton.MouseButton1Click:Connect(function()
+                        TitanCX.Sounds.Click:Play()
+                        createParticleEffect(Mouse)
+                        local configName = "Config_" .. os.time() -- Здесь можно добавить выбор конфига
+                        local data = loadConfig(configName)
+                        if data then
+                            elementsCallback(data)
+                            window:CreateNotification("Config Loaded", "Loaded " .. configName, 3, true)
+                        end
+                    end)
+
+                    table.insert(section.Elements, configFrame)
+                    sectionFrame.Size = UDim2.new(1, -10, 0, 30 + (#section.Elements * 65))
+                    tab.Content.CanvasSize = UDim2.new(0, 0, 0, sectionFrame.Position.Y.Offset + sectionFrame.Size.Y.Offset + 10)
+                end
+
+                return section
+            end
+
+            return subTab
+        end
+
+        return tab
+    end
+
+    -- Theme Editor
+    function window:CreateThemeEditor()
+        local themeFrame = cacheObject("Frame", {
+            Size = UDim2.new(0, 300, 0, 400),
+            Position = UDim2.new(0.5, -150, 0.5, -200),
+            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+            BorderSizePixel = 0,
+            Parent = window.ScreenGui,
+            Visible = false
+        })
+
+        local themeTitle = cacheObject("TextLabel", {
+            Size = UDim2.new(1, -10, 0, 20),
+            Position = UDim2.new(0, 5, 0, 5),
+            BackgroundTransparency = 1,
+            Text = "Theme Editor",
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 16,
+            Parent = themeFrame
+        })
+
+        local nameBox = cacheObject("TextBox", {
+            Size = UDim2.new(1, -10, 0, 25),
+            Position = UDim2.new(0, 5, 0, 30),
+            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Shadow,
+            Text = "CustomTheme",
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 14,
+            Parent = themeFrame
+        })
+
+        local bgColorPicker = cacheObject("TextButton", {
+            Size = UDim2.new(0, 30, 0, 30),
+            Position = UDim2.new(0, 5, 0, 60),
+            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+            Text = "",
+            Parent = themeFrame
+        })
+        local bgLabel = cacheObject("TextLabel", {
+            Size = UDim2.new(0, 100, 0, 20),
+            Position = UDim2.new(0, 40, 0, 65),
+            BackgroundTransparency = 1,
+            Text = "Background",
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 14,
+            Parent = themeFrame
+        })
+
+        local accentColorPicker = cacheObject("TextButton", {
+            Size = UDim2.new(0, 30, 0, 30),
+            Position = UDim2.new(0, 5, 0, 100),
+            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent,
+            Text = "",
+            Parent = themeFrame
+        })
+        local accentLabel = cacheObject("TextLabel", {
+            Size = UDim2.new(0, 100, 0, 20),
+            Position = UDim2.new(0, 40, 0, 105),
+            BackgroundTransparency = 1,
+            Text = "Accent",
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 14,
+            Parent = themeFrame
+        })
+
+        local textColorPicker = cacheObject("TextButton", {
+            Size = UDim2.new(0, 30, 0, 30),
+            Position = UDim2.new(0, 5, 0, 140),
+            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Text = "",
+            Parent = themeFrame
+        })
+        local textLabel = cacheObject("TextLabel", {
+            Size = UDim2.new(0, 100, 0, 20),
+            Position = UDim2.new(0, 40, 0, 145),
+            BackgroundTransparency = 1,
+            Text = "Text",
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 14,
+            Parent = themeFrame
+        })
+
+        local shadowColorPicker = cacheObject("TextButton", {
+            Size = UDim2.new(0, 30, 0, 30),
+            Position = UDim2.new(0, 5, 0, 180),
+            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Shadow,
+            Text = "",
+            Parent = themeFrame
+        })
+        local shadowLabel = cacheObject("TextLabel", {
+            Size = UDim2.new(0, 100, 0, 20),
+            Position = UDim2.new(0, 40, 0, 185),
+            BackgroundTransparency = 1,
+            Text = "Shadow",
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 14,
+            Parent = themeFrame
+        })
+
+        local fontDropdown = cacheObject("TextButton", {
+            Size = UDim2.new(0, 80, 0, 25),
+            Position = UDim2.new(0, 5, 0, 220),
+            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+            Text = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font.Name,
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 14,
+            Parent = themeFrame
+        })
+        local fontList = cacheObject("Frame", {
+            Size = UDim2.new(0, 80, 0, 0),
+            Position = UDim2.new(0, 5, 0, 245),
+            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+            Visible = false,
+            ClipsDescendants = true,
+            Parent = themeFrame
+        })
+
+        local fonts = {Enum.Font.SourceSansPro, Enum.Font.Code, Enum.Font.Arcade, Enum.Font.Fantasy}
+        for i, font in ipairs(fonts) do
+            local fontOption = cacheObject("TextButton", {
+                Size = UDim2.new(1, 0, 0, 25),
+                Position = UDim2.new(0, 0, 0, (i - 1) * 25),
+                BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                Text = font.Name,
+                TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+                Font = font,
+                TextSize = 14,
+                Parent = fontList
+            })
+
+            fontOption.MouseButton1Click:Connect(function()
+                fontDropdown.Text = font.Name
+                fontList.Visible = false
+                tweenObject(fontList, {Size = UDim2.new(0, 80, 0, 0)}, 0.2)
+            end)
+        end
+
+        fontDropdown.MouseButton1Click:Connect(function()
+            fontList.Visible = not fontList.Visible
+            TitanCX.Sounds.Select:Play()
+            tweenObject(fontList, {Size = fontList.Visible and UDim2.new(0, 80, 0, #fonts * 25) or UDim2.new(0, 80, 0, 0)}, 0.2)
+        end)
+
+        local applyButton = cacheObject("TextButton", {
+            Size = UDim2.new(0, 80, 0, 25),
+            Position = UDim2.new(1, -85, 1, -30),
+            BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Accent,
+            Text = "Apply",
+            TextColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Text,
+            Font = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Font,
+            TextSize = 14,
+            Parent = themeFrame
+        })
+
+        local function createPicker(button)
+            local picker = cacheObject("Frame", {
+                Size = UDim2.new(0, 150, 0, 150),
+                Position = UDim2.new(0, 35, 0, 0),
+                BackgroundColor3 = TitanCX.Themes[TitanCX.Settings.DefaultTheme].Background,
+                Visible = false,
+                Parent = button
+            })
+
+            local hueBar = cacheObject("Frame", {
+                Size = UDim2.new(0, 20, 1, -10),
+                Position = UDim2.new(0, 5, 0, 5),
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                Parent = picker
+            })
+            local hueGradient = cacheObject("UIGradient", {
+                Color = ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+                    ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 255, 0)),
+                    ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0, 255, 0)),
+                    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),
+                    ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 0, 255)),
+                    ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255, 0, 255)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
+                }),
+                Parent = hueBar
+            })
+
+            local satVal = cacheObject("Frame", {
+                Size = UDim2.new(1, -35, 1, -10),
+                Position = UDim2.new(0, 25, 0, 5),
+                BackgroundColor3 = button.BackgroundColor3,
+                Parent = picker
+            })
+            local satGradient = cacheObject("UIGradient", {
+                Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), button.BackgroundColor3),
+                Rotation = 0
