@@ -21,7 +21,7 @@ local Tabs = {
     HUD = Window:AddTab("HUD", "monitor"),
 }
 
--- Aimbot configuration (all values disabled by default)
+-- Aimbot configuration (оставляем как есть)
 getgenv().AimSettings = {
     AimPart = "Head",
     FOV = 300,
@@ -40,10 +40,17 @@ getgenv().AimSettings = {
     AimlockKey = "E"
 }
 
--- Aimbot elements in one groupbox
-local AimbotGroup = Tabs["Combat"]:AddLeftGroupbox("Aimbot Settings")
+-- Triggerbot Settings
+getgenv().TriggerbotSettings = {
+    Enabled = false,
+    Delay = 0.1,
+    Radius = 100,
+    CircleVisible = false,
+    CircleType = "Outline" -- Новый параметр для типа круга
+}
 
--- Create the aimbot toggle and capture its reference
+-- Aimbot elements (оставляем как есть)
+local AimbotGroup = Tabs["Combat"]:AddLeftGroupbox("Aimbot Settings")
 local AimToggle = AimbotGroup:AddToggle("AimEnabled", {
     Text = "Enable Aimbot",
     Default = getgenv().AimSettings.Enabled,
@@ -52,8 +59,6 @@ local AimToggle = AimbotGroup:AddToggle("AimEnabled", {
         getgenv().AimSettings.Enabled = Value
     end
 })
-
--- Add a keybind to the toggle
 local AimKeybind = AimToggle:AddKeyPicker("AimKeybind", {
     Default = getgenv().AimSettings.AimlockKey,
     Mode = "Toggle",
@@ -64,7 +69,6 @@ local AimKeybind = AimToggle:AddKeyPicker("AimKeybind", {
         getgenv().AimSettings.AimlockKey = tostring(NewKey):lower()
     end
 })
-
 AimbotGroup:AddDropdown("AimPart", {
     Values = {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"},
     Default = getgenv().AimSettings.AimPart,
@@ -75,7 +79,6 @@ AimbotGroup:AddDropdown("AimPart", {
         getgenv().AimSettings.AimPart = Value
     end
 })
-
 AimbotGroup:AddSlider("FOVSize", {
     Text = "FOV Size",
     Default = getgenv().AimSettings.FOV,
@@ -87,7 +90,6 @@ AimbotGroup:AddSlider("FOVSize", {
         getgenv().AimSettings.FOV = Value
     end
 })
-
 AimbotGroup:AddToggle("FOVVisible", {
     Text = "Show FOV",
     Default = getgenv().AimSettings.FOVVisible,
@@ -96,7 +98,6 @@ AimbotGroup:AddToggle("FOVVisible", {
         getgenv().AimSettings.FOVVisible = Value
     end
 })
-
 AimbotGroup:AddDropdown("FOVType", {
     Values = {"Outline", "Filled"},
     Default = getgenv().AimSettings.FOVType,
@@ -107,7 +108,6 @@ AimbotGroup:AddDropdown("FOVType", {
         getgenv().AimSettings.FOVType = Value
     end
 })
-
 AimbotGroup:AddToggle("TeamCheck", {
     Text = "Team Check",
     Default = getgenv().AimSettings.TeamCheck,
@@ -116,7 +116,6 @@ AimbotGroup:AddToggle("TeamCheck", {
         getgenv().AimSettings.TeamCheck = Value
     end
 })
-
 AimbotGroup:AddToggle("PredictMovement", {
     Text = "Predict Movement",
     Default = getgenv().AimSettings.PredictMovement,
@@ -125,7 +124,6 @@ AimbotGroup:AddToggle("PredictMovement", {
         getgenv().AimSettings.PredictMovement = Value
     end
 })
-
 AimbotGroup:AddSlider("PredictionXZ", {
     Text = "Horizontal Prediction",
     Default = getgenv().AimSettings.predictionXZ * 100,
@@ -138,7 +136,6 @@ AimbotGroup:AddSlider("PredictionXZ", {
         getgenv().AimSettings.predictionXZ = Value / 100
     end
 })
-
 AimbotGroup:AddSlider("PredictionY", {
     Text = "Vertical Prediction",
     Default = getgenv().AimSettings.predictionY * 100,
@@ -151,7 +148,6 @@ AimbotGroup:AddSlider("PredictionY", {
         getgenv().AimSettings.predictionY = Value / 100
     end
 })
-
 AimbotGroup:AddSlider("Smoothness", {
     Text = "Smoothness",
     Default = getgenv().AimSettings.Smoothness * 100,
@@ -164,7 +160,6 @@ AimbotGroup:AddSlider("Smoothness", {
         getgenv().AimSettings.Smoothness = Value / 100
     end
 })
-
 AimbotGroup:AddDropdown("ResolverMode", {
     Values = {"Velocity", "Move direction", "Calculate CFrame"},
     Default = getgenv().AimSettings.ResolverMode,
@@ -176,15 +171,68 @@ AimbotGroup:AddDropdown("ResolverMode", {
     end
 })
 
--- Остальной код остается без изменений
--- Aimbot script logic
-local Players, UserInputService, RunService, StarterGui = game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService"), game:GetService("StarterGui")
+-- Triggerbot UI Elements
+local TriggerbotGroup = Tabs["Combat"]:AddRightGroupbox("Triggerbot Settings")
+
+local TriggerToggle = TriggerbotGroup:AddToggle("TriggerEnabled", {
+    Text = "Enable Triggerbot",
+    Default = getgenv().TriggerbotSettings.Enabled,
+    Tooltip = "Enable/Disable the triggerbot",
+    Callback = function(Value)
+        getgenv().TriggerbotSettings.Enabled = Value
+    end
+})
+
+TriggerbotGroup:AddSlider("TriggerDelay", {
+    Text = "Trigger Delay",
+    Default = getgenv().TriggerbotSettings.Delay * 1000,
+    Min = 0,
+    Max = 1000,
+    Rounding = 0,
+    Suffix = "ms",
+    Callback = function(Value)
+        getgenv().TriggerbotSettings.Delay = Value / 1000
+    end
+})
+
+TriggerbotGroup:AddSlider("TriggerRadius", {
+    Text = "Trigger Radius",
+    Default = getgenv().TriggerbotSettings.Radius,
+    Min = 10,
+    Max = 500,
+    Rounding = 0,
+    Callback = function(Value)
+        getgenv().TriggerbotSettings.Radius = Value
+    end
+})
+
+TriggerbotGroup:AddToggle("TriggerCircleVisible", {
+    Text = "Show Trigger Circle",
+    Default = getgenv().TriggerbotSettings.CircleVisible,
+    Tooltip = "Show/Hide the trigger circle",
+    Callback = function(Value)
+        getgenv().TriggerbotSettings.CircleVisible = Value
+    end
+})
+
+TriggerbotGroup:AddDropdown("TriggerCircleType", {
+    Values = {"Outline", "Filled"},
+    Default = getgenv().TriggerbotSettings.CircleType,
+    Multi = false,
+    Text = "Circle Type",
+    Tooltip = "Select trigger circle display type",
+    Callback = function(Value)
+        getgenv().TriggerbotSettings.CircleType = Value
+    end
+})
+
+-- Aimbot script logic (оставляем как есть)
+local Players, UserInputService, RunService = game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LocalPlayer, Mouse, Camera, CFrameNew, Vector3New, Vector2New = Players.LocalPlayer, Players.LocalPlayer:GetMouse(), workspace.CurrentCamera, CFrame.new, Vector3.new, Vector2.new
 local DrawingEnabled, Aiming = true, false
 local TargetPlayer
 local LastPosition, LastTick, PredictedPosition
 
--- Create FOV circle UI
 local AimbotFOV = Instance.new("ScreenGui")
 AimbotFOV.Parent = game.CoreGui
 AimbotFOV.Name = "AimbotFOV"
@@ -213,15 +261,12 @@ local UICornerOutline = Instance.new("UICorner")
 UICornerOutline.CornerRadius = UDim.new(0.5, 0)
 UICornerOutline.Parent = FOVOutline
 
--- Function to convert world position to screen position
 local function WorldToViewportPoint(position)
     return Camera:WorldToViewportPoint(position)
 end
 
--- Function to find the closest target within FOV
 local function FindTarget()
     if not getgenv().AimSettings.Enabled then return nil end
-    
     local closestPlayer, closestDistance = nil, math.huge
     local fovRadius = getgenv().AimSettings.FOV / 2
 
@@ -241,11 +286,9 @@ local function FindTarget()
             end
         end
     end
-    
     return closestPlayer
 end
 
--- Function to predict target position
 local function PredictPosition(target)
     if target and target.Character and target.Character:FindFirstChild("Humanoid") then
         local aimPart = target.Character:FindFirstChild(getgenv().AimSettings.AimPart)
@@ -274,7 +317,6 @@ local function PredictPosition(target)
                 local distance = (currentPos - LastPosition).Magnitude
                 local speed = (distance / deltaTime) * (0.1 * (getgenv().AimSettings.predictionXZ * 10))
                 PredictedPosition = currentPos + (currentPos - LastPosition).Unit * speed
-                
                 local verticalSpeed = (currentPos.Y - LastPosition.Y) / deltaTime * (0.1 * getgenv().AimSettings.predictionY)
                 PredictedPosition = PredictedPosition + Vector3New(0, verticalSpeed, 0)
             end
@@ -287,7 +329,6 @@ local function PredictPosition(target)
     return nil
 end
 
--- Handle key press to toggle aiming
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode[string.upper(getgenv().AimSettings.AimlockKey)] then
         if not Aiming then
@@ -300,7 +341,6 @@ UserInputService.InputBegan:Connect(function(input)
     end
 end)
 
--- Update FOV circle and aimbot logic every frame
 RunService.RenderStepped:Connect(function()
     local fovPosition = UDim2.new(0, Mouse.X - getgenv().AimSettings.FOV/2, 0, Mouse.Y - getgenv().AimSettings.FOV/2)
     FOVFilled.Position = fovPosition
@@ -314,10 +354,8 @@ RunService.RenderStepped:Connect(function()
 
     if DrawingEnabled and Aiming and TargetPlayer and TargetPlayer.Character and TargetPlayer.Character:FindFirstChild(getgenv().AimSettings.AimPart) then
         local aimPosition = getgenv().AimSettings.PredictMovement and PredictPosition(TargetPlayer) or TargetPlayer.Character[getgenv().AimSettings.AimPart].Position
-        
         local newCFrame = CFrameNew(Camera.CFrame.Position, aimPosition)
         Camera.CFrame = Camera.CFrame:Lerp(newCFrame, getgenv().AimSettings.Smoothness)
-        
         FOVFilled.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         UIStroke.Color = Color3.fromRGB(0, 255, 0)
     else
@@ -326,7 +364,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- Function to cycle through resolver modes
 local function ToggleResolver()
     if getgenv().AimSettings.ResolverMode == "Velocity" then
         getgenv().AimSettings.ResolverMode = "Move direction"
@@ -338,12 +375,165 @@ local function ToggleResolver()
     print("Resolver mode changed to:", getgenv().AimSettings.ResolverMode)
 end
 
--- Bind resolver toggle to the 'R' key
 UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.R then
         ToggleResolver()
     end
 end)
+
+-- Triggerbot Logic
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Camera = Workspace.CurrentCamera
+local LastActivationTime = tick()
+
+-- Безопасное создание GUI
+local function CreateSafeGui()
+    local success, gui = pcall(function()
+        local screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "TriggerbotFOV"
+        screenGui.Parent = game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
+        return screenGui
+    end)
+    return success and gui or nil
+end
+
+local TriggerbotFOV = CreateSafeGui()
+if not TriggerbotFOV then
+    warn("Failed to create Triggerbot GUI")
+    return
+end
+
+-- Создание элементов с защитой от ошибок
+local function CreateCircle(name, filled)
+    return pcall(function()
+        local element = filled and Instance.new("Frame") or Instance.new("ImageLabel")
+        element.Name = name
+        element.Size = UDim2.new(0, getgenv().TriggerbotSettings.Radius * 2, 0, getgenv().TriggerbotSettings.Radius * 2)
+        
+        if filled then
+            element.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            element.BackgroundTransparency = 0.7
+        else
+            element.BackgroundTransparency = 1
+            element.Image = "rbxassetid://0"
+            local stroke = Instance.new("UIStroke")
+            stroke.Thickness = 2
+            stroke.Color = Color3.fromRGB(255, 255, 255)
+            stroke.Parent = element
+        end
+        
+        element.BorderSizePixel = 0
+        element.Parent = TriggerbotFOV
+        
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0.5, 0)
+        corner.Parent = element
+        
+        return element
+    end)
+end
+
+local successFilled, TriggerFilled = CreateCircle("TriggerFilled", true)
+local successOutline, TriggerOutline = CreateCircle("TriggerOutline", false)
+
+if not successFilled or not successOutline then
+    warn("Failed to create trigger circles")
+    return
+end
+
+-- Функция проверки стен
+local function WallCheck(part)
+    local origin = Camera.CFrame.Position
+    local target = part.Position
+    local direction = (target - origin).Unit
+    local distance = (target - origin).Magnitude
+    
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    params.IgnoreWater = true
+    
+    local result = Workspace:Raycast(origin, direction * distance, params)
+    if result then
+        local hitPart = result.Instance
+        local model = hitPart:FindFirstAncestorOfClass("Model")
+        return not (model and Players:GetPlayerFromCharacter(model))
+    end
+    return true
+end
+
+-- Основной цикл
+local function UpdateTriggerbot()
+    if not getgenv().TriggerbotSettings.Enabled then
+        TriggerFilled.Visible = false
+        TriggerOutline.Visible = false
+        return
+    end
+
+    -- Обновление позиции
+    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
+    local circlePos = UDim2.new(0, mousePos.X - getgenv().TriggerbotSettings.Radius, 
+                               0, mousePos.Y - getgenv().TriggerbotSettings.Radius)
+    
+    TriggerFilled.Position = circlePos
+    TriggerOutline.Position = circlePos
+    
+    -- Обновление видимости
+    local showFilled = getgenv().TriggerbotSettings.CircleVisible and getgenv().TriggerbotSettings.CircleType == "Filled"
+    local showOutline = getgenv().TriggerbotSettings.CircleVisible and getgenv().TriggerbotSettings.CircleType == "Outline"
+    
+    TriggerFilled.Visible = showFilled
+    TriggerOutline.Visible = showOutline
+    
+    -- Поиск цели
+    local targetFound = false
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            if humanoidRootPart then
+                local screenPos, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                if onScreen then
+                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    if distance <= getgenv().TriggerbotSettings.Radius and not WallCheck(humanoidRootPart) then
+                        targetFound = true
+                        break
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Обработка триггера
+    if targetFound then
+        if tick() - LastActivationTime >= getgenv().TriggerbotSettings.Delay then
+            local character = LocalPlayer.Character
+            if character then
+                local tool = character:FindFirstChildOfClass("Tool")
+                if tool and tool:FindFirstChild("Handle") then
+                    tool:Activate()
+                    task.wait(0.1)
+                    tool:Deactivate()
+                end
+            end
+            LastActivationTime = tick()
+        end
+        TriggerFilled.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        if TriggerOutline:FindFirstChild("UIStroke") then
+            TriggerOutline.UIStroke.Color = Color3.fromRGB(0, 255, 0)
+        end
+    else
+        TriggerFilled.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        if TriggerOutline:FindFirstChild("UIStroke") then
+            TriggerOutline.UIStroke.Color = Color3.fromRGB(255, 0, 0)
+        end
+    end
+end
+
+-- Запуск обновления
+RunService.RenderStepped:Connect(UpdateTriggerbot)
 
 -- Setup ThemeManager and SaveManager
 ThemeManager:SetLibrary(Library)
