@@ -7,8 +7,8 @@ local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 -- Create the main window
 local Window = Library:CreateWindow({
     Title = "ClickGUI",
-    Footer = "version: 1.0",
-    ShowCustomCursor = true,
+    Footer = "Cursed by 32vision",
+    ShowCustomCursor = false,
 })
 
 -- Create tabs
@@ -37,14 +37,14 @@ getgenv().AimSettings = {
     predictionY = 0.2,
     ResolverMode = "Velocity",
     Enabled = false,
-    AimlockKey = "E" -- Add default key to settings
+    AimlockKey = "E"
 }
 
--- Aimbot elements in the Combat tab
-local AimGroup = Tabs["Combat"]:AddLeftGroupbox("Aimbot")
+-- Aimbot elements in one groupbox
+local AimbotGroup = Tabs["Combat"]:AddLeftGroupbox("Aimbot Settings")
 
 -- Create the aimbot toggle and capture its reference
-local AimToggle = AimGroup:AddToggle("AimEnabled", {
+local AimToggle = AimbotGroup:AddToggle("AimEnabled", {
     Text = "Enable Aimbot",
     Default = getgenv().AimSettings.Enabled,
     Tooltip = "Enable/Disable the aimbot",
@@ -53,23 +53,19 @@ local AimToggle = AimGroup:AddToggle("AimEnabled", {
     end
 })
 
--- Add a keybind to the toggle using the reference
+-- Add a keybind to the toggle
 local AimKeybind = AimToggle:AddKeyPicker("AimKeybind", {
-    Default = getgenv().AimSettings.AimlockKey, -- Use the default from settings
-    Mode = "Toggle", -- Toggle mode to lock/unlock aim on key press
+    Default = getgenv().AimSettings.AimlockKey,
+    Mode = "Toggle",
     Text = "Aim Key",
     NoUI = false,
-    Callback = function(Value)
-        -- Value is a boolean (true/false) indicating the keybind state
-        -- We don't need to set the key here since ChangedCallback handles the key change
-    end,
+    Callback = function(Value) end,
     ChangedCallback = function(NewKey)
-        -- NewKey is the new key (string) selected by the user
-        getgenv().AimSettings.AimlockKey = tostring(NewKey):lower() -- Convert to lowercase string
+        getgenv().AimSettings.AimlockKey = tostring(NewKey):lower()
     end
 })
 
-AimGroup:AddDropdown("AimPart", {
+AimbotGroup:AddDropdown("AimPart", {
     Values = {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"},
     Default = getgenv().AimSettings.AimPart,
     Multi = false,
@@ -80,7 +76,7 @@ AimGroup:AddDropdown("AimPart", {
     end
 })
 
-AimGroup:AddSlider("FOVSize", {
+AimbotGroup:AddSlider("FOVSize", {
     Text = "FOV Size",
     Default = getgenv().AimSettings.FOV,
     Min = 50,
@@ -92,7 +88,7 @@ AimGroup:AddSlider("FOVSize", {
     end
 })
 
-AimGroup:AddToggle("FOVVisible", {
+AimbotGroup:AddToggle("FOVVisible", {
     Text = "Show FOV",
     Default = getgenv().AimSettings.FOVVisible,
     Tooltip = "Show/Hide the FOV circle",
@@ -101,7 +97,7 @@ AimGroup:AddToggle("FOVVisible", {
     end
 })
 
-AimGroup:AddDropdown("FOVType", {
+AimbotGroup:AddDropdown("FOVType", {
     Values = {"Outline", "Filled"},
     Default = getgenv().AimSettings.FOVType,
     Multi = false,
@@ -112,7 +108,7 @@ AimGroup:AddDropdown("FOVType", {
     end
 })
 
-AimGroup:AddToggle("TeamCheck", {
+AimbotGroup:AddToggle("TeamCheck", {
     Text = "Team Check",
     Default = getgenv().AimSettings.TeamCheck,
     Tooltip = "Ignore teammates",
@@ -121,7 +117,7 @@ AimGroup:AddToggle("TeamCheck", {
     end
 })
 
-AimGroup:AddToggle("PredictMovement", {
+AimbotGroup:AddToggle("PredictMovement", {
     Text = "Predict Movement",
     Default = getgenv().AimSettings.PredictMovement,
     Tooltip = "Predict target movement",
@@ -130,10 +126,7 @@ AimGroup:AddToggle("PredictMovement", {
     end
 })
 
--- Prediction settings in the Combat tab (right side)
-local PredictionGroup = Tabs["Combat"]:AddRightGroupbox("Prediction Settings")
-
-PredictionGroup:AddSlider("PredictionXZ", {
+AimbotGroup:AddSlider("PredictionXZ", {
     Text = "Horizontal Prediction",
     Default = getgenv().AimSettings.predictionXZ * 100,
     Min = 0,
@@ -146,7 +139,7 @@ PredictionGroup:AddSlider("PredictionXZ", {
     end
 })
 
-PredictionGroup:AddSlider("PredictionY", {
+AimbotGroup:AddSlider("PredictionY", {
     Text = "Vertical Prediction",
     Default = getgenv().AimSettings.predictionY * 100,
     Min = 0,
@@ -159,7 +152,7 @@ PredictionGroup:AddSlider("PredictionY", {
     end
 })
 
-PredictionGroup:AddSlider("Smoothness", {
+AimbotGroup:AddSlider("Smoothness", {
     Text = "Smoothness",
     Default = getgenv().AimSettings.Smoothness * 100,
     Min = 0,
@@ -172,7 +165,7 @@ PredictionGroup:AddSlider("Smoothness", {
     end
 })
 
-PredictionGroup:AddDropdown("ResolverMode", {
+AimbotGroup:AddDropdown("ResolverMode", {
     Values = {"Velocity", "Move direction", "Calculate CFrame"},
     Default = getgenv().AimSettings.ResolverMode,
     Multi = false,
@@ -183,6 +176,7 @@ PredictionGroup:AddDropdown("ResolverMode", {
     end
 })
 
+-- Остальной код остается без изменений
 -- Aimbot script logic
 local Players, UserInputService, RunService, StarterGui = game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService"), game:GetService("StarterGui")
 local LocalPlayer, Mouse, Camera, CFrameNew, Vector3New, Vector2New = Players.LocalPlayer, Players.LocalPlayer:GetMouse(), workspace.CurrentCamera, CFrame.new, Vector3.new, Vector2.new
