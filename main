@@ -1,555 +1,357 @@
+-- Load the Obsidian UI Library and addons
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
 local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
 local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
--- AimBot implementation
-local AimBot = {
-    Settings = {
-        Enabled = false,
-        AimPart = "Head",
-        OldAimPart = "Head",
-        AimlockKey = "e",
-        FOV = 300,
-        FOVVisible = false,
-        FOVType = "Outline",
-        ThirdPerson = false,
-        FirstPerson = false,
-        TeamCheck = false,
-        PredictMovement = false,
-        PredictionMethod = "Velocity",
-        PredictionVelocity = 9.5,
-        predictionXZ = 0.4,
-        predictionY = 0.2,
-        Smoothness = 0.15,
-        CheckIfJumped = false,
-        HitmarkerEnabled = false,
-        BoxESPEnabled = false
-    },
-    Connections = {},
-    Objects = {
-        BoxLines = {},
-        Hitmarkers = {},
-        FOVCircle = nil,
-        FOVOutline = nil
-    },
-    State = {
-        AimlockTarget = nil,
-        MousePressed = false,
-        CanNotify = false,
-        LastHealth = nil,
-        LastPosition = nil,
-        LastTime = nil,
-        LastPrediction = nil
-    }
-}
-
-function AimBot:Init()
-    for i = 1, 12 do
-        self.Objects.BoxLines[i] = Drawing.new("Line")
-        self.Objects.BoxLines[i].Thickness = 1
-        self.Objects.BoxLines[i].Color = Color3.fromRGB(255, 255, 255)
-        self.Objects.BoxLines[i].Visible = false
-    end
-    
-    self.Objects.FOVCircle = Drawing.new("Circle")
-    self.Objects.FOVCircle.Visible = false
-    self.Objects.FOVCircle.Radius = self.Settings.FOV / 2
-    self.Objects.FOVCircle.Color = Color3.fromRGB(255, 0, 0)
-    self.Objects.FOVCircle.Thickness = 2
-    self.Objects.FOVCircle.Filled = true
-    self.Objects.FOVCircle.Transparency = 0.7
-    
-    self.Objects.FOVOutline = Drawing.new("Circle")
-    self.Objects.FOVOutline.Visible = false
-    self.Objects.FOVOutline.Radius = self.Settings.FOV / 2
-    self.Objects.FOVOutline.Color = Color3.fromRGB(255, 0, 0)
-    self.Objects.FOVOutline.Thickness = 2
-    self.Objects.FOVOutline.Filled = false
-    
-    self.Services = {
-        Players = game:GetService("Players"),
-        Uis = game:GetService("UserInputService"),
-        RService = game:GetService("RunService"),
-        TweenService = game:GetService("TweenService"),
-        Workspace = game:GetService("Workspace")
-    }
-    
-    self.Local = {
-        Client = self.Services.Players.LocalPlayer,
-        Mouse = self.Services.Players.LocalPlayer:GetMouse(),
-        Camera = workspace.CurrentCamera
-    }
-    
-    self.Utils = {
-        CF = CFrame.new,
-        RNew = Ray.new,
-        Vec3 = Vector3.new,
-        Vec2 = Vector2.new,
-        WorldToViewportPoint = function(pos)
-            return self.Local.Camera:WorldToViewportPoint(pos)
-        end,
-        KeyCodeToString = function(key)
-            return tostring(key):gsub("Enum.KeyCode.", ""):lower()
-        end
-    }
-end
-
-function AimBot:CreateHitmarker(damage, position)
-    if not self.Settings.HitmarkerEnabled or damage <= 0 then return end
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "Hitmarker"
-    billboard.Adornee = Instance.new("Part")
-    billboard.Adornee.Anchored = true
-    billboard.Adornee.Transparency = 1
-    billboard.Adornee.Size = Vector3.new(0.1, 0.1, 0.1)
-    billboard.Adornee.Position = position
-    billboard.Adornee.Parent = workspace
-    billboard.Size = UDim2.new(0, 50, 0, 50)
-    billboard.StudsOffset = Vector3.new(0, 2, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = workspace
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = Color3.fromRGB(255, 50, 50)
-    label.Font = Enum.Font.GothamBlack
-    label.TextSize = 20
-    label.Text = tostring(math.floor(damage))
-    label.TextStrokeTransparency = 0.5
-    label.TextStrokeColor3 = Color3.new(0, 0, 0)
-    label.Parent = billboard
-
-    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    local growTween = self.Services.TweenService:Create(label, tweenInfo, {TextSize = 30})
-    growTween:Play()
-
-    table.insert(self.Objects.Hitmarkers, billboard)
-    
-    task.spawn(function()
-        task.wait(1.5)
-        local fadeTween = self.Services.TweenService:Create(label, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {TextTransparency = 1, TextStrokeTransparency = 1})
-        fadeTween:Play()
-        fadeTween.Completed:Connect(function()
-            billboard:Destroy()
-            table.remove(self.Objects.Hitmarkers, table.find(self.Objects.Hitmarkers, billboard))
-        end)
-    end)
-end
-
-function AimBot:IsPartVisible(target, partName)
-    if not target or not target.Character or not target.Character:FindFirstChild(partName) then return false end
-    local part = target.Character[partName]
-    local rayOrigin = self.Local.Camera.CFrame.Position
-    local rayDirection = (part.Position - rayOrigin).Unit * 1000
-    local ray = self.Utils.RNew(rayOrigin, rayDirection)
-    local hit, hitPos = workspace:FindPartOnRayWithIgnoreList(ray, {self.Local.Client.Character})
-    return hit == part or (hit and hit:IsDescendantOf(target.Character))
-end
-
-function AimBot:IsPlayerRagdolled(target)
-    if not target.Character or not target.Character:FindFirstChild("Humanoid") then return true end
-    local humanoid = target.Character.Humanoid
-    local state = humanoid:GetState()
-    return state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown or humanoid.Health <= 0
-end
-
-function AimBot:GetVisibleAimPart(target)
-    local possibleParts = {"Head", "UpperTorso", "LowerTorso", "HumanoidRootPart"}
-    for _, partName in ipairs(possibleParts) do
-        if target.Character:FindFirstChild(partName) and self:IsPartVisible(target, partName) then
-            return partName
-        end
-    end
-    return "HumanoidRootPart"
-end
-
-function AimBot:UpdateBoxESP()
-    if not self.Settings.BoxESPEnabled or not self.State.AimlockTarget or not self.State.AimlockTarget.Character or 
-       not self.State.AimlockTarget.Character:FindFirstChild(self.Settings.AimPart) or not self.State.MousePressed then
-        for _, line in ipairs(self.Objects.BoxLines) do
-            line.Visible = false
-        end
-        return
-    end
-
-    local part = self.State.AimlockTarget.Character[self.Settings.AimPart]
-    local predictedPos = self:CalculatePrediction(self.State.AimlockTarget)
-    local size = self.Utils.Vec3(3, 4, 2)
-
-    local corners = {
-        self.Utils.Vec3(predictedPos.X - size.X/2, predictedPos.Y - size.Y/2, predictedPos.Z - size.Z/2),
-        self.Utils.Vec3(predictedPos.X + size.X/2, predictedPos.Y - size.Y/2, predictedPos.Z - size.Z/2),
-        self.Utils.Vec3(predictedPos.X + size.X/2, predictedPos.Y + size.Y/2, predictedPos.Z - size.Z/2),
-        self.Utils.Vec3(predictedPos.X - size.X/2, predictedPos.Y + size.Y/2, predictedPos.Z - size.Z/2),
-        self.Utils.Vec3(predictedPos.X - size.X/2, predictedPos.Y - size.Y/2, predictedPos.Z + size.Z/2),
-        self.Utils.Vec3(predictedPos.X + size.X/2, predictedPos.Y - size.Y/2, predictedPos.Z + size.Z/2),
-        self.Utils.Vec3(predictedPos.X + size.X/2, predictedPos.Y + size.Y/2, predictedPos.Z + size.Z/2),
-        self.Utils.Vec3(predictedPos.X - size.X/2, predictedPos.Y + size.Y/2, predictedPos.Z + size.Z/2)
-    }
-
-    local screenCorners = {}
-    for i, corner in ipairs(corners) do
-        local screenPos, onScreen = self.Utils.WorldToViewportPoint(corner)
-        screenCorners[i] = onScreen and self.Utils.Vec2(screenPos.X, screenPos.Y) or nil
-    end
-
-    if not screenCorners[1] then
-        for _, line in ipairs(self.Objects.BoxLines) do
-            line.Visible = false
-        end
-        return
-    end
-
-    local edges = {
-        {1, 2}, {2, 3}, {3, 4}, {4, 1},
-        {5, 6}, {6, 7}, {7, 8}, {8, 5},
-        {1, 5}, {2, 6}, {3, 7}, {4, 8}
-    }
-
-    for i, edge in ipairs(edges) do
-        local startPos = screenCorners[edge[1]]
-        local endPos = screenCorners[edge[2]]
-        if startPos and endPos then
-            self.Objects.BoxLines[i].From = startPos
-            self.Objects.BoxLines[i].To = endPos
-            self.Objects.BoxLines[i].Visible = true
-        else
-            self.Objects.BoxLines[i].Visible = false
-        end
-    end
-end
-
-function AimBot:CalculatePrediction(target)
-    if not target or not target.Character or not target.Character:FindFirstChild(self.Settings.AimPart) then
-        return nil
-    end
-    
-    local part = target.Character[self.Settings.AimPart]
-    local currentPos = part.Position
-    
-    if not self.Settings.PredictMovement then
-        return currentPos
-    end
-    
-    if not self.State.LastPosition or not self.State.LastTime then
-        self.State.LastPosition = currentPos
-        self.State.LastTime = tick()
-        return currentPos
-    end
-    
-    local currentTime = tick()
-    local timeDiff = currentTime - self.State.LastTime
-    
-    if self.Settings.PredictionMethod == "Velocity" then
-        local velocity = part.Velocity
-        self.State.LastPrediction = currentPos + Vector3.new(
-            velocity.X * self.Settings.predictionXZ * timeDiff,
-            velocity.Y * self.Settings.predictionY * timeDiff,
-            velocity.Z * self.Settings.predictionXZ * timeDiff
-        )
-    elseif self.Settings.PredictionMethod == "Move direction" then
-        if target.Character:FindFirstChild("Humanoid") then
-            local moveDir = target.Character.Humanoid.MoveDirection
-            local predictionFactor = self.Settings.PredictionVelocity * timeDiff
-            self.State.LastPrediction = currentPos + (moveDir * predictionFactor)
-        else
-            self.State.LastPrediction = currentPos
-        end
-    elseif self.Settings.PredictionMethod == "Calculate CFrame" then
-        if (currentPos - self.State.LastPosition).Magnitude < 0.001 then
-            self.State.LastPrediction = currentPos
-        else
-            local velocity = (currentPos - self.State.LastPosition) / timeDiff
-            self.State.LastPrediction = currentPos + (velocity * self.Settings.PredictionVelocity * timeDiff)
-        end
-    end
-    
-    self.State.LastPosition = currentPos
-    self.State.LastTime = currentTime
-    
-    return self.State.LastPrediction or currentPos
-end
-
-function AimBot:GetNearestTarget()
-    local players = {}
-    local PLAYER_HOLD = {}
-    local DISTANCES = {}
-    
-    for _, v in pairs(self.Services.Players:GetPlayers()) do
-        if v ~= self.Local.Client and not self:IsPlayerRagdolled(v) then
-            table.insert(players, v)
-        end
-    end
-    
-    for _, v in pairs(players) do
-        if v.Character ~= nil and v.Character:FindFirstChild(self.Settings.AimPart) then
-            local AIM = v.Character[self.Settings.AimPart]
-            if self.Settings.TeamCheck == true and v.Team ~= self.Local.Client.Team then
-                local DISTANCE = (AIM.Position - self.Local.Camera.CFrame.p).magnitude
-                local RAY = self.Utils.RNew(self.Local.Camera.CFrame.p, (self.Local.Mouse.Hit.p - self.Local.Camera.CFrame.p).unit * DISTANCE)
-                local HIT, POS = workspace:FindPartOnRay(RAY, workspace)
-                local DIFF = math.floor((POS - AIM.Position).magnitude)
-                PLAYER_HOLD[v.Name .. #PLAYER_HOLD+1] = {
-                    dist = DISTANCE,
-                    plr = v,
-                    diff = DIFF
-                }
-                table.insert(DISTANCES, DIFF)
-            elseif self.Settings.TeamCheck == false then 
-                local DISTANCE = (AIM.Position - self.Local.Camera.CFrame.p).magnitude
-                local RAY = self.Utils.RNew(self.Local.Camera.CFrame.p, (self.Local.Mouse.Hit.p - self.Local.Camera.CFrame.p).unit * DISTANCE)
-                local HIT, POS = workspace:FindPartOnRay(RAY, workspace)
-                local DIFF = math.floor((POS - AIM.Position).magnitude)
-                PLAYER_HOLD[v.Name .. #PLAYER_HOLD+1] = {
-                    dist = DISTANCE,
-                    plr = v,
-                    diff = DIFF
-                }
-                table.insert(DISTANCES, DIFF)
-            end
-        end
-    end
-    
-    if unpack(DISTANCES) == nil then
-        return nil
-    end
-    
-    local L_DISTANCE = math.floor(math.min(unpack(DISTANCES)))
-    if L_DISTANCE > self.Settings.FOV / 2 then
-        return nil
-    end
-    
-    for _, v in pairs(PLAYER_HOLD) do
-        if v.diff == L_DISTANCE then
-            return v.plr
-        end
-    end
-    return nil
-end
-
-function AimBot:KeyDownHandler(input, processed)
-    if processed then return end
-    
-    local key = input.KeyCode
-    local keyStr = self.Utils.KeyCodeToString(key)
-    local aimKeyStr = self.Settings.AimlockKey:lower()
-    
-    if keyStr == aimKeyStr then
-        if self.State.AimlockTarget == nil then
-            pcall(function()
-                if self.State.MousePressed ~= true then 
-                    self.State.MousePressed = true 
-                end 
-                local Target = self:GetNearestTarget()
-                if Target ~= nil then 
-                    self.State.AimlockTarget = Target
-                    self.State.LastHealth = nil
-                    Library:Notify({
-                        Title = "AimBot",
-                        Description = "Locked onto " .. Target.Name,
-                        Time = 2
-                    })
-                end
-            end)
-        elseif self.State.AimlockTarget ~= nil then
-            if self.State.AimlockTarget ~= nil then 
-                self.State.AimlockTarget = nil 
-            end
-            if self.State.MousePressed ~= false then 
-                self.State.MousePressed = false 
-            end
-            self.State.LastHealth = nil
-            for _, line in ipairs(self.Objects.BoxLines) do
-                line.Visible = false
-            end
-            Library:Notify({
-                Title = "AimBot",
-                Description = "Aimlock disabled",
-                Time = 2
-            })
-        end
-    end
-end
-
-function AimBot:RenderSteppedHandler()
-    if not self.Settings.Enabled then
-        self.Objects.FOVCircle.Visible = false
-        self.Objects.FOVOutline.Visible = false
-        for _, line in ipairs(self.Objects.BoxLines) do
-            line.Visible = false
-        end
-        return
-    end
-    
-    local mousePos = self.Services.Uis:GetMouseLocation()
-    self.Objects.FOVCircle.Position = mousePos
-    self.Objects.FOVOutline.Position = mousePos
-    
-    self.Objects.FOVCircle.Visible = self.Settings.FOVVisible and self.Settings.FOVType == "Filled" and self.Settings.Enabled
-    self.Objects.FOVOutline.Visible = self.Settings.FOVVisible and self.Settings.FOVType == "Outline" and self.Settings.Enabled
-    self.Objects.FOVCircle.Radius = self.Settings.FOV / 2
-    self.Objects.FOVOutline.Radius = self.Settings.FOV / 2
-    
-    if self.Settings.ThirdPerson == true and self.Settings.FirstPerson == true then 
-        self.State.CanNotify = true 
-    elseif self.Settings.ThirdPerson == true and self.Settings.FirstPerson == false then 
-        self.State.CanNotify = (self.Local.Camera.Focus.p - self.Local.Camera.CoordinateFrame.p).Magnitude > 1 
-    elseif self.Settings.ThirdPerson == false and self.Settings.FirstPerson == true then 
-        self.State.CanNotify = (self.Local.Camera.Focus.p - self.Local.Camera.CoordinateFrame.p).Magnitude <= 1 
-    end
-    
-    if self.State.MousePressed then 
-        if self.State.AimlockTarget and self.State.AimlockTarget.Character and 
-           self.State.AimlockTarget.Character:FindFirstChild(self.Settings.AimPart) and 
-           not self:IsPlayerRagdolled(self.State.AimlockTarget) then 
-            
-            local visibleAimPart = self:GetVisibleAimPart(self.State.AimlockTarget)
-            if visibleAimPart ~= self.Settings.AimPart then
-                self.Settings.OldAimPart = self.Settings.AimPart
-                self.Settings.AimPart = visibleAimPart
-            end
-
-            if self.State.CanNotify then
-                local predictedPos = self:CalculatePrediction(self.State.AimlockTarget)
-                
-                if predictedPos then
-                    local targetCFrame = self.Utils.CF(self.Local.Camera.CFrame.Position, predictedPos)
-                    self.Local.Camera.CFrame = self.Local.Camera.CFrame:Lerp(targetCFrame, self.Settings.Smoothness)
-                end
-            end
-            
-            local humanoid = self.State.AimlockTarget.Character:FindFirstChild("Humanoid")
-            if humanoid then
-                local currentHealth = humanoid.Health
-                if self.State.LastHealth == nil then
-                    self.State.LastHealth = currentHealth
-                elseif currentHealth < self.State.LastHealth then
-                    local damage = self.State.LastHealth - currentHealth
-                    local hitPosition = self.State.AimlockTarget.Character[self.Settings.AimPart].Position
-                    self:CreateHitmarker(damage, hitPosition)
-                end
-                self.State.LastHealth = currentHealth
-            end
-            
-            if self.Settings.BoxESPEnabled then
-                self:UpdateBoxESP()
-            else
-                for _, line in ipairs(self.Objects.BoxLines) do
-                    line.Visible = false
-                end
-            end
-            
-            if self.Settings.FOVVisible then
-                self.Objects.FOVCircle.Color = Color3.fromRGB(0, 255, 0)
-                self.Objects.FOVOutline.Color = Color3.fromRGB(0, 255, 0)
-            end
-        else
-            self.State.LastHealth = nil
-            for _, line in ipairs(self.Objects.BoxLines) do
-                line.Visible = false
-            end
-            self.State.AimlockTarget = nil
-            
-            if self.Settings.FOVVisible then
-                self.Objects.FOVCircle.Color = Color3.fromRGB(255, 0, 0)
-                self.Objects.FOVOutline.Color = Color3.fromRGB(255, 0, 0)
-            end
-        end
-    else
-        self.State.LastHealth = nil
-        for _, line in ipairs(self.Objects.BoxLines) do
-            line.Visible = false
-        end
-        
-        if self.Settings.FOVVisible then
-            self.Objects.FOVCircle.Color = Color3.fromRGB(255, 0, 0)
-            self.Objects.FOVOutline.Color = Color3.fromRGB(255, 0, 0)
-        end
-    end
-    
-    if self.Settings.CheckIfJumped then
-        if self.State.AimlockTarget and self.State.AimlockTarget.Character and self.State.AimlockTarget.Character:FindFirstChild("Humanoid") then
-            if self.State.AimlockTarget.Character.Humanoid.FloorMaterial == Enum.Material.Air then
-                self.Settings.OldAimPart = self.Settings.AimPart
-                self.Settings.AimPart = "UpperTorso"
-            else
-                self.Settings.AimPart = self.Settings.OldAimPart
-            end
-        end
-    end
-end
-
-function AimBot:ConnectHandlers()
-    table.insert(self.Connections, self.Services.Uis.InputBegan:Connect(function(input, processed)
-        self:KeyDownHandler(input, processed)
-    end))
-    
-    table.insert(self.Connections, self.Services.RService.RenderStepped:Connect(function()
-        self:RenderSteppedHandler()
-    end))
-end
-
-function AimBot:Disable()
-    for _, connection in ipairs(self.Connections) do
-        connection:Disconnect()
-    end
-    
-    for _, line in ipairs(self.Objects.BoxLines) do
-        line.Visible = false
-        line:Remove()
-    end
-    
-    for _, hitmarker in ipairs(self.Objects.Hitmarkers) do
-        hitmarker:Destroy()
-    end
-    
-    if self.Objects.FOVCircle then
-        self.Objects.FOVCircle.Visible = false
-        self.Objects.FOVCircle:Remove()
-    end
-    
-    if self.Objects.FOVOutline then
-        self.Objects.FOVOutline.Visible = false
-        self.Objects.FOVOutline:Remove()
-    end
-    
-    self.Connections = {}
-    self.Objects.BoxLines = {}
-    self.Objects.Hitmarkers = {}
-    self.State = {
-        AimlockTarget = nil,
-        MousePressed = false,
-        CanNotify = false,
-        LastHealth = nil,
-        LastPosition = nil,
-        LastTime = nil,
-        LastPrediction = nil
-    }
-end
-
--- GUI Setup
+-- Create the main window
 local Window = Library:CreateWindow({
-    Title = "TitanCX",
-    Footer = "Got cursed by 32vision",
-	ShowCustomCursor = false,
-    ToggleKeybind = Enum.KeyCode.Insert,
-    Center = true,
-    AutoShow = true
+    Title = "ClickGUI",
+    Footer = "version: 1.0",
+    ShowCustomCursor = true,
 })
 
+-- Create tabs
 local Tabs = {
     Combat = Window:AddTab("Combat", "sword"),
     Movement = Window:AddTab("Movement", "move"),
     Visuals = Window:AddTab("Visuals", "eye"),
     Misc = Window:AddTab("Misc", "box"),
-    Other = Window:AddTab("Other", "list"),
+    Other = Window:AddTab("Other", "grid"),
     HUD = Window:AddTab("HUD", "monitor"),
 }
 
--- Setup managers
+-- Aimbot configuration (all values disabled by default)
+getgenv().AimSettings = {
+    AimPart = "Head",
+    FOV = 300,
+    FOVVisible = false,
+    FOVType = "Outline",
+    ThirdPerson = false,
+    FirstPerson = false,
+    TeamCheck = false,
+    PredictMovement = false,
+    PredictionVelocity = 9.5,
+    Smoothness = 0.15,
+    predictionXZ = 0.4,
+    predictionY = 0.2,
+    ResolverMode = "Velocity",
+    Enabled = false,
+    AimlockKey = "E" -- Add default key to settings
+}
+
+-- Aimbot elements in the Combat tab
+local AimGroup = Tabs["Combat"]:AddLeftGroupbox("Aimbot")
+
+-- Create the aimbot toggle and capture its reference
+local AimToggle = AimGroup:AddToggle("AimEnabled", {
+    Text = "Enable Aimbot",
+    Default = getgenv().AimSettings.Enabled,
+    Tooltip = "Enable/Disable the aimbot",
+    Callback = function(Value)
+        getgenv().AimSettings.Enabled = Value
+    end
+})
+
+-- Add a keybind to the toggle using the reference
+local AimKeybind = AimToggle:AddKeyPicker("AimKeybind", {
+    Default = getgenv().AimSettings.AimlockKey, -- Use the default from settings
+    Mode = "Toggle", -- Toggle mode to lock/unlock aim on key press
+    Text = "Aim Key",
+    NoUI = false,
+    Callback = function(Value)
+        -- Value is a boolean (true/false) indicating the keybind state
+        -- We don't need to set the key here since ChangedCallback handles the key change
+    end,
+    ChangedCallback = function(NewKey)
+        -- NewKey is the new key (string) selected by the user
+        getgenv().AimSettings.AimlockKey = tostring(NewKey):lower() -- Convert to lowercase string
+    end
+})
+
+AimGroup:AddDropdown("AimPart", {
+    Values = {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"},
+    Default = getgenv().AimSettings.AimPart,
+    Multi = false,
+    Text = "Aim Part",
+    Tooltip = "Select the part to aim at",
+    Callback = function(Value)
+        getgenv().AimSettings.AimPart = Value
+    end
+})
+
+AimGroup:AddSlider("FOVSize", {
+    Text = "FOV Size",
+    Default = getgenv().AimSettings.FOV,
+    Min = 50,
+    Max = 1000,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        getgenv().AimSettings.FOV = Value
+    end
+})
+
+AimGroup:AddToggle("FOVVisible", {
+    Text = "Show FOV",
+    Default = getgenv().AimSettings.FOVVisible,
+    Tooltip = "Show/Hide the FOV circle",
+    Callback = function(Value)
+        getgenv().AimSettings.FOVVisible = Value
+    end
+})
+
+AimGroup:AddDropdown("FOVType", {
+    Values = {"Outline", "Filled"},
+    Default = getgenv().AimSettings.FOVType,
+    Multi = false,
+    Text = "FOV Type",
+    Tooltip = "Select FOV display type",
+    Callback = function(Value)
+        getgenv().AimSettings.FOVType = Value
+    end
+})
+
+AimGroup:AddToggle("TeamCheck", {
+    Text = "Team Check",
+    Default = getgenv().AimSettings.TeamCheck,
+    Tooltip = "Ignore teammates",
+    Callback = function(Value)
+        getgenv().AimSettings.TeamCheck = Value
+    end
+})
+
+AimGroup:AddToggle("PredictMovement", {
+    Text = "Predict Movement",
+    Default = getgenv().AimSettings.PredictMovement,
+    Tooltip = "Predict target movement",
+    Callback = function(Value)
+        getgenv().AimSettings.PredictMovement = Value
+    end
+})
+
+-- Prediction settings in the Combat tab (right side)
+local PredictionGroup = Tabs["Combat"]:AddRightGroupbox("Prediction Settings")
+
+PredictionGroup:AddSlider("PredictionXZ", {
+    Text = "Horizontal Prediction",
+    Default = getgenv().AimSettings.predictionXZ * 100,
+    Min = 0,
+    Max = 100,
+    Rounding = 1,
+    Compact = false,
+    Suffix = "%",
+    Callback = function(Value)
+        getgenv().AimSettings.predictionXZ = Value / 100
+    end
+})
+
+PredictionGroup:AddSlider("PredictionY", {
+    Text = "Vertical Prediction",
+    Default = getgenv().AimSettings.predictionY * 100,
+    Min = 0,
+    Max = 100,
+    Rounding = 1,
+    Compact = false,
+    Suffix = "%",
+    Callback = function(Value)
+        getgenv().AimSettings.predictionY = Value / 100
+    end
+})
+
+PredictionGroup:AddSlider("Smoothness", {
+    Text = "Smoothness",
+    Default = getgenv().AimSettings.Smoothness * 100,
+    Min = 0,
+    Max = 100,
+    Rounding = 1,
+    Compact = false,
+    Suffix = "%",
+    Callback = function(Value)
+        getgenv().AimSettings.Smoothness = Value / 100
+    end
+})
+
+PredictionGroup:AddDropdown("ResolverMode", {
+    Values = {"Velocity", "Move direction", "Calculate CFrame"},
+    Default = getgenv().AimSettings.ResolverMode,
+    Multi = false,
+    Text = "Resolver Mode",
+    Tooltip = "Select prediction calculation mode",
+    Callback = function(Value)
+        getgenv().AimSettings.ResolverMode = Value
+    end
+})
+
+-- Aimbot script logic
+local Players, UserInputService, RunService, StarterGui = game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService"), game:GetService("StarterGui")
+local LocalPlayer, Mouse, Camera, CFrameNew, Vector3New, Vector2New = Players.LocalPlayer, Players.LocalPlayer:GetMouse(), workspace.CurrentCamera, CFrame.new, Vector3.new, Vector2.new
+local DrawingEnabled, Aiming = true, false
+local TargetPlayer
+local LastPosition, LastTick, PredictedPosition
+
+-- Create FOV circle UI
+local AimbotFOV = Instance.new("ScreenGui")
+AimbotFOV.Parent = game.CoreGui
+AimbotFOV.Name = "AimbotFOV"
+
+local FOVFilled = Instance.new("Frame")
+FOVFilled.Size = UDim2.new(0, getgenv().AimSettings.FOV, 0, getgenv().AimSettings.FOV)
+FOVFilled.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+FOVFilled.BackgroundTransparency = 0.7
+FOVFilled.BorderSizePixel = 0
+FOVFilled.Parent = AimbotFOV
+local UICornerFilled = Instance.new("UICorner")
+UICornerFilled.CornerRadius = UDim.new(0.5, 0)
+UICornerFilled.Parent = FOVFilled
+
+local FOVOutline = Instance.new("ImageLabel")
+FOVOutline.Size = UDim2.new(0, getgenv().AimSettings.FOV, 0, getgenv().AimSettings.FOV)
+FOVOutline.BackgroundTransparency = 1
+FOVOutline.Image = "rbxassetid://0"
+FOVOutline.BorderSizePixel = 0
+FOVOutline.Parent = AimbotFOV
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Thickness = 2
+UIStroke.Color = Color3.fromRGB(255, 0, 0)
+UIStroke.Parent = FOVOutline
+local UICornerOutline = Instance.new("UICorner")
+UICornerOutline.CornerRadius = UDim.new(0.5, 0)
+UICornerOutline.Parent = FOVOutline
+
+-- Function to convert world position to screen position
+local function WorldToViewportPoint(position)
+    return Camera:WorldToViewportPoint(position)
+end
+
+-- Function to find the closest target within FOV
+local function FindTarget()
+    if not getgenv().AimSettings.Enabled then return nil end
+    
+    local closestPlayer, closestDistance = nil, math.huge
+    local fovRadius = getgenv().AimSettings.FOV / 2
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            if not getgenv().AimSettings.TeamCheck or player.Team ~= LocalPlayer.Team then
+                local targetPos = player.Character.HumanoidRootPart.Position
+                local screenPos, onScreen = WorldToViewportPoint(targetPos)
+                local distance = (Vector2New(Mouse.X, Mouse.Y) - Vector2New(screenPos.X, screenPos.Y)).Magnitude
+                
+                if distance <= fovRadius and onScreen then
+                    if distance < closestDistance then
+                        closestDistance = distance
+                        closestPlayer = player
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+-- Function to predict target position
+local function PredictPosition(target)
+    if target and target.Character and target.Character:FindFirstChild("Humanoid") then
+        local aimPart = target.Character:FindFirstChild(getgenv().AimSettings.AimPart)
+        if not aimPart then return nil end
+        local currentPos = aimPart.Position
+        
+        if not LastPosition or not LastTick then
+            LastPosition = currentPos
+            LastTick = tick()
+            PredictedPosition = currentPos
+            return PredictedPosition
+        end
+
+        local currentTick = tick()
+        local deltaTime = currentTick - LastTick
+        
+        if getgenv().AimSettings.ResolverMode == "Velocity" then
+            local velocity = aimPart.Velocity
+            PredictedPosition = currentPos + Vector3New(velocity.X * getgenv().AimSettings.predictionXZ, velocity.Y * getgenv().AimSettings.predictionY, velocity.Z * getgenv().AimSettings.predictionXZ)
+        elseif getgenv().AimSettings.ResolverMode == "Move direction" then
+            PredictedPosition = currentPos + (target.Character.Humanoid.MoveDirection * (getgenv().AimSettings.predictionXZ * 10))
+        elseif getgenv().AimSettings.ResolverMode == "Calculate CFrame" then
+            if (currentPos - LastPosition).Magnitude < 0.001 then
+                PredictedPosition = currentPos 
+            else
+                local distance = (currentPos - LastPosition).Magnitude
+                local speed = (distance / deltaTime) * (0.1 * (getgenv().AimSettings.predictionXZ * 10))
+                PredictedPosition = currentPos + (currentPos - LastPosition).Unit * speed
+                
+                local verticalSpeed = (currentPos.Y - LastPosition.Y) / deltaTime * (0.1 * getgenv().AimSettings.predictionY)
+                PredictedPosition = PredictedPosition + Vector3New(0, verticalSpeed, 0)
+            end
+        end
+        
+        LastTick = currentTick
+        LastPosition = currentPos
+        return PredictedPosition
+    end
+    return nil
+end
+
+-- Handle key press to toggle aiming
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode[string.upper(getgenv().AimSettings.AimlockKey)] then
+        if not Aiming then
+            Aiming = true
+            TargetPlayer = FindTarget()
+        else
+            Aiming = false
+            TargetPlayer = nil
+        end
+    end
+end)
+
+-- Update FOV circle and aimbot logic every frame
+RunService.RenderStepped:Connect(function()
+    local fovPosition = UDim2.new(0, Mouse.X - getgenv().AimSettings.FOV/2, 0, Mouse.Y - getgenv().AimSettings.FOV/2)
+    FOVFilled.Position = fovPosition
+    FOVOutline.Position = fovPosition
+
+    FOVFilled.Size = UDim2.new(0, getgenv().AimSettings.FOV, 0, getgenv().AimSettings.FOV)
+    FOVOutline.Size = UDim2.new(0, getgenv().AimSettings.FOV, 0, getgenv().AimSettings.FOV)
+
+    FOVFilled.Visible = getgenv().AimSettings.FOVVisible and getgenv().AimSettings.FOVType == "Filled"
+    FOVOutline.Visible = getgenv().AimSettings.FOVVisible and getgenv().AimSettings.FOVType == "Outline"
+
+    if DrawingEnabled and Aiming and TargetPlayer and TargetPlayer.Character and TargetPlayer.Character:FindFirstChild(getgenv().AimSettings.AimPart) then
+        local aimPosition = getgenv().AimSettings.PredictMovement and PredictPosition(TargetPlayer) or TargetPlayer.Character[getgenv().AimSettings.AimPart].Position
+        
+        local newCFrame = CFrameNew(Camera.CFrame.Position, aimPosition)
+        Camera.CFrame = Camera.CFrame:Lerp(newCFrame, getgenv().AimSettings.Smoothness)
+        
+        FOVFilled.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        UIStroke.Color = Color3.fromRGB(0, 255, 0)
+    else
+        FOVFilled.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        UIStroke.Color = Color3.fromRGB(255, 0, 0)
+    end
+end)
+
+-- Function to cycle through resolver modes
+local function ToggleResolver()
+    if getgenv().AimSettings.ResolverMode == "Velocity" then
+        getgenv().AimSettings.ResolverMode = "Move direction"
+    elseif getgenv().AimSettings.ResolverMode == "Move direction" then
+        getgenv().AimSettings.ResolverMode = "Calculate CFrame"
+    elseif getgenv().AimSettings.ResolverMode == "Calculate CFrame" then
+        getgenv().AimSettings.ResolverMode = "Velocity"
+    end
+    print("Resolver mode changed to:", getgenv().AimSettings.ResolverMode)
+end
+
+-- Bind resolver toggle to the 'R' key
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.R then
+        ToggleResolver()
+    end
+end)
+
+-- Setup ThemeManager and SaveManager
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
@@ -560,235 +362,6 @@ SaveManager:SetFolder("ClickGUI/settings")
 
 SaveManager:BuildConfigSection(Tabs["HUD"])
 ThemeManager:ApplyToTab(Tabs["HUD"])
-
--- Combat Tab Setup
-local AimBotGroup = Tabs.Combat:AddLeftGroupbox("AimBot Settings")
-
--- Enable Toggle
-local AimBotToggle = AimBotGroup:AddToggle("AimBotToggle", {
-    Text = "Enable AimBot",
-    Default = AimBot.Settings.Enabled,
-    Callback = function(Value)
-        AimBot.Settings.Enabled = Value
-        if Value then
-            AimBot:ConnectHandlers()
-        else
-            AimBot:Disable()
-        end
-    end
-})
-
--- Aim Part Dropdown
-AimBotGroup:AddDropdown("AimPart", {
-    Text = "Aim Part",
-    Values = {"Head", "UpperTorso", "LowerTorso", "HumanoidRootPart"},
-    Default = table.find({"Head", "UpperTorso", "LowerTorso", "HumanoidRootPart"}, AimBot.Settings.AimPart),
-    Callback = function(Value)
-        AimBot.Settings.AimPart = Value
-        AimBot.Settings.OldAimPart = Value
-    end
-})
-
--- Prediction Method Dropdown
-AimBotGroup:AddDropdown("PredictionMethod", {
-    Text = "Prediction Method",
-    Values = {"Velocity", "Move direction", "Calculate CFrame"},
-    Default = table.find({"Velocity", "Move direction", "Calculate CFrame"}, AimBot.Settings.PredictionMethod),
-    Callback = function(Value)
-        AimBot.Settings.PredictionMethod = Value
-    end
-})
-
--- Aimlock Keybind
-AimBotToggle:AddKeyPicker("AimlockKey", {
-    Text = "Aimlock Key",
-    Default = AimBot.Settings.AimlockKey,
-    Mode = "Toggle",
-    Callback = function(Value)
-        AimBot.Settings.AimlockKey = Value:lower()
-    end,
-    ChangedCallback = function(New)
-        AimBot.Settings.AimlockKey = New:lower()
-    end
-})
-
--- FOV Settings
-AimBotGroup:AddSlider("FOV", {
-    Text = "FOV Radius",
-    Default = AimBot.Settings.FOV,
-    Min = 50,
-    Max = 1000,
-    Rounding = 0,
-    Suffix = " px",
-    Callback = function(Value)
-        AimBot.Settings.FOV = Value
-    end
-})
-
-AimBotGroup:AddToggle("FOVVisible", {
-    Text = "Show FOV",
-    Default = AimBot.Settings.FOVVisible,
-    Callback = function(Value)
-        AimBot.Settings.FOVVisible = Value
-    end
-})
-
-AimBotGroup:AddDropdown("FOVType", {
-    Text = "FOV Type",
-    Values = {"Filled", "Outline"},
-    Default = table.find({"Filled", "Outline"}, AimBot.Settings.FOVType),
-    Callback = function(Value)
-        AimBot.Settings.FOVType = Value
-    end
-})
-
--- Camera Mode Toggles
-AimBotGroup:AddToggle("ThirdPerson", {
-    Text = "Third Person",
-    Default = AimBot.Settings.ThirdPerson,
-    Callback = function(Value)
-        AimBot.Settings.ThirdPerson = Value
-    end
-})
-
-AimBotGroup:AddToggle("FirstPerson", {
-    Text = "First Person",
-    Default = AimBot.Settings.FirstPerson,
-    Callback = function(Value)
-        AimBot.Settings.FirstPerson = Value
-    end
-})
-
--- Team Check
-AimBotGroup:AddToggle("TeamCheck", {
-    Text = "Team Check",
-    Default = AimBot.Settings.TeamCheck,
-    Callback = function(Value)
-        AimBot.Settings.TeamCheck = Value
-    end
-})
-
--- Prediction Settings
-AimBotGroup:AddToggle("PredictMovement", {
-    Text = "Predict Movement",
-    Default = AimBot.Settings.PredictMovement,
-    Callback = function(Value)
-        AimBot.Settings.PredictMovement = Value
-    end
-})
-
-AimBotGroup:AddSlider("PredictionVelocity", {
-    Text = "Prediction Velocity",
-    Default = AimBot.Settings.PredictionVelocity,
-    Min = 1,
-    Max = 20,
-    Rounding = 1,
-    Callback = function(Value)
-        AimBot.Settings.PredictionVelocity = Value
-    end
-})
-
-AimBotGroup:AddSlider("predictionXZ", {
-    Text = "Horizontal Prediction",
-    Default = AimBot.Settings.predictionXZ * 100,
-    Min = 1,
-    Max = 100,
-    Rounding = 0,
-    Suffix = "%",
-    Callback = function(Value)
-        AimBot.Settings.predictionXZ = Value / 100
-    end
-})
-
-AimBotGroup:AddSlider("predictionY", {
-    Text = "Vertical Prediction",
-    Default = AimBot.Settings.predictionY * 100,
-    Min = 1,
-    Max = 100,
-    Rounding = 0,
-    Suffix = "%",
-    Callback = function(Value)
-        AimBot.Settings.predictionY = Value / 100
-    end
-})
-
-AimBotGroup:AddToggle("CheckIfJumped", {
-    Text = "Check If Jumped",
-    Default = AimBot.Settings.CheckIfJumped,
-    Callback = function(Value)
-        AimBot.Settings.CheckIfJumped = Value
-    end
-})
-
--- Smoothness Settings
-AimBotGroup:AddSlider("Smoothness", {
-    Text = "Smoothness",
-    Default = AimBot.Settings.Smoothness * 100,
-    Min = 1,
-    Max = 100,
-    Rounding = 0,
-    Suffix = "%",
-    Callback = function(Value)
-        AimBot.Settings.Smoothness = Value / 100
-    end
-})
-
--- Visual Settings
-AimBotGroup:AddToggle("HitmarkerEnabled", {
-    Text = "Hitmarkers",
-    Default = AimBot.Settings.HitmarkerEnabled,
-    Callback = function(Value)
-        AimBot.Settings.HitmarkerEnabled = Value
-    end
-})
-
-AimBotGroup:AddToggle("BoxESPEnabled", {
-    Text = "Box ESP",
-    Default = AimBot.Settings.BoxESPEnabled,
-    Callback = function(Value)
-        AimBot.Settings.BoxESPEnabled = Value
-    end
-})
-
--- HUD Tab Setup
-local HUDGroup = Tabs.HUD:AddLeftGroupbox("HUD Settings")
-
--- Custom Cursor Toggle
-HUDGroup:AddToggle("CustomCursorToggle", {
-    Text = "Custom Cursor",
-    Default = false,
-    Callback = function(Value)
-        Library.ShowCustomCursor = Value
-    end
-})
-
--- Standalone GUI Toggle Keybind
-local HiddenGUIToggle = HUDGroup:AddToggle("HiddenGUIToggle", {
-    Text = "Hidden GUI Toggle",
-    Default = true,
-    Visible = false,
-    Callback = function(Value)
-        Library:Toggle(Value)
-    end
-})
-
-HiddenGUIToggle:AddKeyPicker("GUIToggleKey", {
-    Text = "Toggle GUI",
-    Default = "Insert",
-    Mode = "Toggle",
-    SyncToggleState = true,
-    Callback = function(Value)
-        Library:Toggle(not Library.Toggled)
-    end,
-    ChangedCallback = function(New)
-    end
-})
-
--- Initialize AimBot
-AimBot:Init()
-if AimBot.Settings.Enabled then
-    AimBot:ConnectHandlers()
-end
 
 -- Show the UI
 Library:Toggle(true)
