@@ -17,7 +17,7 @@ local Tabs = {
     Movement = Window:AddTab("Movement", "move"),
     Visuals = Window:AddTab("Visuals", "eye"),
     Misc = Window:AddTab("Misc", "box"),
-    Other = Window:AddTab("Other", "grid"),
+    Other = Window:AddTab("Other", "list"),
     HUD = Window:AddTab("HUD", "monitor"),
 }
 
