@@ -1491,6 +1491,153 @@ LocalPlayer.AncestryChanged:Connect(function()
     stopStrafe()
 end)
 
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local GuiService = game:GetService("GuiService")
+
+-- Local variables
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Camera = Workspace.CurrentCamera
+
+-- [Ваш существующий код Aimbot, Triggerbot, Rapid Fire, Pro Aim, Target Strafe остается без изменений до Movement] --
+
+-- Speed Hack Settings
+getgenv().SpeedHackSettings = {
+    Enabled = false,
+    Speed = 50,
+    Keybind = "V"
+}
+
+-- Speed Hack Groupbox
+local MovementGroup = Tabs["Movement"]:AddLeftGroupbox("Speed Hack Settings")
+
+-- Speed Hack Logic
+local speedHackConnection
+local function updateSpeedHack(character)
+    if not character then return end
+    local rootPart = character:WaitForChild("HumanoidRootPart")
+    local humanoid = character:WaitForChild("Humanoid")
+    local moveDirection = Vector3.new(0, 0, 0)
+
+    if speedHackConnection then
+        speedHackConnection:Disconnect()
+    end
+
+    speedHackConnection = RunService.Heartbeat:Connect(function(deltaTime)
+        if getgenv().SpeedHackSettings.Enabled then
+            local move = humanoid.MoveDirection
+            if move.Magnitude > 0 then
+                moveDirection = move.Unit * getgenv().SpeedHackSettings.Speed
+                rootPart.CFrame = rootPart.CFrame + (moveDirection * deltaTime)
+            end
+        end
+    end)
+end
+
+-- Speed Hack UI Elements
+local SpeedHackToggle = MovementGroup:AddToggle("SpeedHackEnabled", {
+    Text = "Enable Speed Hack",
+    Default = getgenv().SpeedHackSettings.Enabled,
+    Tooltip = "Enable/Disable CFrame Speed Hack",
+    Callback = function(Value)
+        getgenv().SpeedHackSettings.Enabled = Value
+        if Value then
+            updateSpeedHack(LocalPlayer.Character)
+        elseif speedHackConnection then
+            speedHackConnection:Disconnect()
+            speedHackConnection = nil
+        end
+    end
+})
+
+local SpeedHackKeybind = SpeedHackToggle:AddKeyPicker("SpeedHackKeybind", {
+    Default = getgenv().SpeedHackSettings.Keybind,
+    Mode = "Toggle",
+    Text = "Speed Hack Key",
+    NoUI = false,
+    Callback = function(Value)
+        getgenv().SpeedHackSettings.Enabled = not getgenv().SpeedHackSettings.Enabled
+        SpeedHackToggle:SetValue(getgenv().SpeedHackSettings.Enabled)
+        Library:Notify({
+            Title = "Speed Hack",
+            Description = "Speed Hack " .. (getgenv().SpeedHackSettings.Enabled and "Enabled" or "Disabled"),
+            Time = 2
+        })
+        if getgenv().SpeedHackSettings.Enabled then
+            updateSpeedHack(LocalPlayer.Character)
+        elseif speedHackConnection then
+            speedHackConnection:Disconnect()
+            speedHackConnection = nil
+        end
+    end,
+    ChangedCallback = function(NewKey)
+        getgenv().SpeedHackSettings.Keybind = tostring(NewKey):lower()
+    end
+})
+
+MovementGroup:AddInput("SpeedHackSpeed", {
+    Default = tostring(getgenv().SpeedHackSettings.Speed),
+    Numeric = true,
+    Finished = true,
+    Text = "Speed Value",
+    Tooltip = "Set the speed value (studs per second)",
+    Placeholder = "Enter speed...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 0 then
+            getgenv().SpeedHackSettings.Speed = numValue
+            Library:Notify({
+                Title = "Speed Hack",
+                Description = "Speed set to " .. numValue,
+                Time = 2
+            })
+        else
+            Library:Notify({
+                Title = "Speed Hack",
+                Description = "Please enter a valid number!",
+                Time = 2
+            })
+        end
+    end
+})
+
+-- Handle character respawn
+LocalPlayer.CharacterAdded:Connect(function(character)
+    if getgenv().SpeedHackSettings.Enabled then
+        updateSpeedHack(character)
+    end
+end)
+
+-- Cleanup on player exit
+LocalPlayer.AncestryChanged:Connect(function()
+    if speedHackConnection then
+        speedHackConnection:Disconnect()
+        speedHackConnection = nil
+    end
+end)
+
+-- [Ваш оставшийся код после Movement, включая ThemeManager и SaveManager] --
+
+-- Setup ThemeManager and SaveManager
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+
+ThemeManager:SetFolder("ClickGUI")
+SaveManager:SetFolder("ClickGUI/settings")
+
+SaveManager:BuildConfigSection(Tabs["HUD"])
+ThemeManager:ApplyToTab(Tabs["HUD"])
+
+-- Show the UI
+Library:Toggle(true)
+
+
 -- Setup ThemeManager and SaveManager
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
