@@ -21,20 +21,31 @@ local Tabs = {
     HUD = Window:AddTab("HUD", "monitor"),
 }
 
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local GuiService = game:GetService("GuiService")
+
+-- Local variables
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
+local Camera = Workspace.CurrentCamera
+
 -- Aimbot configuration
 getgenv().AimSettings = {
     AimPart = "Head",
     FOV = 300,
     FOVVisible = false,
     FOVType = "Outline",
-    ThirdPerson = false,
-    FirstPerson = false,
     TeamCheck = false,
     PredictMovement = false,
-    PredictionVelocity = 9.5,
     Smoothness = 0.15,
     predictionXZ = 0.4,
     predictionY = 0.2,
+    WallCheck = false,
+    RagdollCheck = false,
     ResolverMode = "Velocity",
     Enabled = false,
     AimlockKey = "E"
@@ -53,7 +64,7 @@ getgenv().TriggerbotSettings = {
     TargetMode = "Center of Screen"
 }
 
--- Aimbot elements
+-- Aimbot UI elements
 local AimbotGroup = Tabs["Combat"]:AddLeftGroupbox("Aimbot Settings")
 local AimToggle = AimbotGroup:AddToggle("AimEnabled", {
     Text = "Enable Aimbot",
@@ -63,6 +74,7 @@ local AimToggle = AimbotGroup:AddToggle("AimEnabled", {
         getgenv().AimSettings.Enabled = Value
     end
 })
+
 local AimKeybind = AimToggle:AddKeyPicker("AimKeybind", {
     Default = getgenv().AimSettings.AimlockKey,
     Mode = "Toggle",
@@ -73,6 +85,7 @@ local AimKeybind = AimToggle:AddKeyPicker("AimKeybind", {
         getgenv().AimSettings.AimlockKey = tostring(NewKey):lower()
     end
 })
+
 AimbotGroup:AddDropdown("AimPart", {
     Values = {"Head", "HumanoidRootPart", "UpperTorso", "LowerTorso"},
     Default = getgenv().AimSettings.AimPart,
@@ -83,6 +96,7 @@ AimbotGroup:AddDropdown("AimPart", {
         getgenv().AimSettings.AimPart = Value
     end
 })
+
 AimbotGroup:AddSlider("FOVSize", {
     Text = "FOV Size",
     Default = getgenv().AimSettings.FOV,
@@ -94,6 +108,7 @@ AimbotGroup:AddSlider("FOVSize", {
         getgenv().AimSettings.FOV = Value
     end
 })
+
 AimbotGroup:AddToggle("FOVVisible", {
     Text = "Show FOV",
     Default = getgenv().AimSettings.FOVVisible,
@@ -102,6 +117,7 @@ AimbotGroup:AddToggle("FOVVisible", {
         getgenv().AimSettings.FOVVisible = Value
     end
 })
+
 AimbotGroup:AddDropdown("FOVType", {
     Values = {"Outline", "Filled"},
     Default = getgenv().AimSettings.FOVType,
@@ -112,6 +128,7 @@ AimbotGroup:AddDropdown("FOVType", {
         getgenv().AimSettings.FOVType = Value
     end
 })
+
 AimbotGroup:AddToggle("TeamCheck", {
     Text = "Team Check",
     Default = getgenv().AimSettings.TeamCheck,
@@ -120,6 +137,7 @@ AimbotGroup:AddToggle("TeamCheck", {
         getgenv().AimSettings.TeamCheck = Value
     end
 })
+
 AimbotGroup:AddToggle("PredictMovement", {
     Text = "Predict Movement",
     Default = getgenv().AimSettings.PredictMovement,
@@ -128,6 +146,7 @@ AimbotGroup:AddToggle("PredictMovement", {
         getgenv().AimSettings.PredictMovement = Value
     end
 })
+
 AimbotGroup:AddSlider("PredictionXZ", {
     Text = "Horizontal Prediction",
     Default = getgenv().AimSettings.predictionXZ * 100,
@@ -140,6 +159,7 @@ AimbotGroup:AddSlider("PredictionXZ", {
         getgenv().AimSettings.predictionXZ = Value / 100
     end
 })
+
 AimbotGroup:AddSlider("PredictionY", {
     Text = "Vertical Prediction",
     Default = getgenv().AimSettings.predictionY * 100,
@@ -152,6 +172,7 @@ AimbotGroup:AddSlider("PredictionY", {
         getgenv().AimSettings.predictionY = Value / 100
     end
 })
+
 AimbotGroup:AddSlider("Smoothness", {
     Text = "Smoothness",
     Default = getgenv().AimSettings.Smoothness * 100,
@@ -164,6 +185,7 @@ AimbotGroup:AddSlider("Smoothness", {
         getgenv().AimSettings.Smoothness = Value / 100
     end
 })
+
 AimbotGroup:AddDropdown("ResolverMode", {
     Values = {"Velocity", "Move direction", "Calculate CFrame"},
     Default = getgenv().AimSettings.ResolverMode,
@@ -174,6 +196,298 @@ AimbotGroup:AddDropdown("ResolverMode", {
         getgenv().AimSettings.ResolverMode = Value
     end
 })
+
+AimbotGroup:AddToggle("WallCheck", {
+    Text = "Wall Check",
+    Default = false,
+    Tooltip = "Ignore targets behind walls",
+    Callback = function(Value)
+        getgenv().AimSettings.WallCheck = Value
+    end
+})
+
+AimbotGroup:AddToggle("RagdollCheck", {
+    Text = "Ragdoll Check",
+    Default = false,
+    Tooltip = "Ignore ragdolled/dead targets",
+    Callback = function(Value)
+        getgenv().AimSettings.RagdollCheck = Value
+    end
+})
+
+-- Замените существующую функцию IsTargetVisible на эту
+local function IsTargetVisible(targetPart)
+    if not getgenv().AimSettings.WallCheck then return true end
+    
+    local origin = Camera.CFrame.Position
+    local targetPos = targetPart.Position
+    local direction = (targetPos - origin)
+    local distance = direction.Magnitude
+    
+    -- Настраиваем параметры raycast
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    params.IgnoreWater = true
+    
+    -- Выполняем raycast
+    local result = Workspace:Raycast(origin, direction, params)
+    
+    if result then
+        local hitPart = result.Instance
+        -- Проверяем, попали ли мы в часть персонажа цели
+        local targetCharacter = targetPart:FindFirstAncestorOfClass("Model")
+        local hitCharacter = hitPart:FindFirstAncestorOfClass("Model")
+        
+        -- Если попали не в персонажа цели, значит есть стена
+        if hitCharacter ~= targetCharacter then
+            return false
+        end
+    end
+    
+    return true
+end
+
+-- Также обновим функцию FindTarget для лучшей совместимости
+local function FindTarget()
+    if not getgenv().AimSettings.Enabled then return nil end
+    
+    local closestPlayer, closestDistance = nil, math.huge
+    local fovRadius = getgenv().AimSettings.FOV / 2
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if getgenv().AimSettings.TeamCheck and player.Team == LocalPlayer.Team then continue end
+        
+        local character = player.Character
+        if not character then continue end
+        
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoid then continue end
+        
+        if not IsTargetValid(character) then continue end
+        
+        local aimPart = character:FindFirstChild(getgenv().AimSettings.AimPart)
+        if not aimPart then continue end
+        
+        -- Сначала проверяем FOV, затем видимость через стены
+        local screenPos, onScreen = Camera:WorldToViewportPoint(aimPart.Position)
+        if not onScreen then continue end
+        
+        local distance = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+        if distance <= fovRadius and distance < closestDistance then
+            if IsTargetVisible(aimPart) then
+                closestDistance = distance
+                closestPlayer = player
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+local function IsTargetValid(targetCharacter)
+    if not getgenv().AimSettings.RagdollCheck then return true end
+    
+    local humanoid = targetCharacter:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return false end
+    
+    if humanoid.Health <= 0 then return false end
+    
+    local states = {
+        Enum.HumanoidStateType.FallingDown,
+        Enum.HumanoidStateType.Physics,
+        Enum.HumanoidStateType.Dead
+    }
+    
+    for _, state in ipairs(states) do
+        if humanoid:GetState() == state then
+            return false
+        end
+    end
+    
+    local rootPart = targetCharacter:FindFirstChild("HumanoidRootPart")
+    if rootPart then
+        local characterHeight = targetCharacter:GetExtentsSize().Y
+        if rootPart.Position.Y < (characterHeight * 0.5) then
+            return false
+        end
+    end
+    
+    return true
+end
+
+local function FindTarget()
+    if not getgenv().AimSettings.Enabled then return nil end
+    
+    local closestPlayer, closestDistance = nil, math.huge
+    local fovRadius = getgenv().AimSettings.FOV / 2
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if getgenv().AimSettings.TeamCheck and player.Team == LocalPlayer.Team then continue end
+        
+        local character = player.Character
+        if not character then continue end
+        
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not humanoid then continue end
+        
+        if not IsTargetValid(character) then continue end
+        
+        local aimPart = character:FindFirstChild(getgenv().AimSettings.AimPart)
+        if not aimPart then continue end
+        
+        if not IsTargetVisible(aimPart) then continue end
+        
+        local screenPos, onScreen = Camera:WorldToViewportPoint(aimPart.Position)
+        if not onScreen then continue end
+        
+        local distance = (Vector2.new(Mouse.X, Mouse.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+        if distance <= fovRadius and distance < closestDistance then
+            closestDistance = distance
+            closestPlayer = player
+        end
+    end
+    
+    return closestPlayer
+end
+
+local LastPosition, LastTick, PredictedPosition
+local function PredictPosition(target)
+    if not (target and target.Character) then return nil end
+    
+    local aimPart = target.Character:FindFirstChild(getgenv().AimSettings.AimPart)
+    if not aimPart then return nil end
+    
+    local currentPos = aimPart.Position
+    
+    if not (LastPosition and LastTick) then
+        LastPosition = currentPos
+        LastTick = tick()
+        return currentPos
+    end
+    
+    local currentTick = tick()
+    local deltaTime = currentTick - LastTick
+    
+    if getgenv().AimSettings.ResolverMode == "Velocity" then
+        local velocity = aimPart.Velocity
+        PredictedPosition = currentPos + Vector3.new(
+            velocity.X * getgenv().AimSettings.predictionXZ,
+            velocity.Y * getgenv().AimSettings.predictionY,
+            velocity.Z * getgenv().AimSettings.predictionXZ
+        )
+    elseif getgenv().AimSettings.ResolverMode == "Move direction" then
+        local moveDir = target.Character.Humanoid.MoveDirection
+        PredictedPosition = currentPos + (moveDir * (getgenv().AimSettings.predictionXZ * 10))
+    else -- "Calculate CFrame"
+        if (currentPos - LastPosition).Magnitude < 0.001 then
+            PredictedPosition = currentPos
+        else
+            local distance = (currentPos - LastPosition).Magnitude
+            local speed = (distance / deltaTime) * (0.1 * (getgenv().AimSettings.predictionXZ * 10))
+            PredictedPosition = currentPos + (currentPos - LastPosition).Unit * speed
+            local verticalSpeed = (currentPos.Y - LastPosition.Y) / deltaTime * (0.1 * getgenv().AimSettings.predictionY)
+            PredictedPosition = PredictedPosition + Vector3.new(0, verticalSpeed, 0)
+        end
+    end
+    
+    LastTick = currentTick
+    LastPosition = currentPos
+    return PredictedPosition
+end
+
+-- Aimbot FOV visualization
+local AimbotFOV = Instance.new("ScreenGui")
+AimbotFOV.Parent = game.CoreGui
+AimbotFOV.Name = "AimbotFOV"
+AimbotFOV.ResetOnSpawn = false
+
+local FOVFilled = Instance.new("Frame")
+FOVFilled.Size = UDim2.new(0, getgenv().AimSettings.FOV, 0, getgenv().AimSettings.FOV)
+FOVFilled.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+FOVFilled.BackgroundTransparency = 0.7
+FOVFilled.BorderSizePixel = 0
+FOVFilled.Parent = AimbotFOV
+
+local UICornerFilled = Instance.new("UICorner")
+UICornerFilled.CornerRadius = UDim.new(0.5, 0)
+UICornerFilled.Parent = FOVFilled
+
+local FOVOutline = Instance.new("ImageLabel")
+FOVOutline.Size = UDim2.new(0, getgenv().AimSettings.FOV, 0, getgenv().AimSettings.FOV)
+FOVOutline.BackgroundTransparency = 1
+FOVOutline.Image = "rbxassetid://0"
+FOVOutline.BorderSizePixel = 0
+FOVOutline.Parent = AimbotFOV
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Thickness = 2
+UIStroke.Color = Color3.fromRGB(255, 0, 0)
+UIStroke.Parent = FOVOutline
+
+local UICornerOutline = Instance.new("UICorner")
+UICornerOutline.CornerRadius = UDim.new(0.5, 0)
+UICornerOutline.Parent = FOVOutline
+
+-- Aimbot logic
+local Aiming = false
+local TargetPlayer = nil
+
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode[string.upper(getgenv().AimSettings.AimlockKey)] then
+        Aiming = not Aiming
+        if Aiming then
+            TargetPlayer = FindTarget()
+        else
+            TargetPlayer = nil
+        end
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    local fovPosition = UDim2.new(0, Mouse.X - getgenv().AimSettings.FOV/2, 0, Mouse.Y - getgenv().AimSettings.FOV/2)
+    FOVFilled.Position = fovPosition
+    FOVOutline.Position = fovPosition
+
+    FOVFilled.Size = UDim2.new(0, getgenv().AimSettings.FOV, 0, getgenv().AimSettings.FOV)
+    FOVOutline.Size = UDim2.new(0, getgenv().AimSettings.FOV, 0, getgenv().AimSettings.FOV)
+
+    FOVFilled.Visible = getgenv().AimSettings.FOVVisible and getgenv().AimSettings.FOVType == "Filled"
+    FOVOutline.Visible = getgenv().AimSettings.FOVVisible and getgenv().AimSettings.FOVType == "Outline"
+
+    if Aiming and getgenv().AimSettings.Enabled then
+        if not TargetPlayer or not TargetPlayer.Character or not TargetPlayer.Character:FindFirstChild(getgenv().AimSettings.AimPart) then
+            TargetPlayer = FindTarget()
+        end
+
+        if TargetPlayer and TargetPlayer.Character then
+            local aimPart = TargetPlayer.Character:FindFirstChild(getgenv().AimSettings.AimPart)
+            if aimPart then
+                if not IsTargetValid(TargetPlayer.Character) or not IsTargetVisible(aimPart) then
+                    TargetPlayer = FindTarget()
+                    if not TargetPlayer then
+                        FOVFilled.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+                        UIStroke.Color = Color3.fromRGB(255, 0, 0)
+                        return
+                    end
+                end
+
+                local aimPosition = getgenv().AimSettings.PredictMovement and PredictPosition(TargetPlayer) or aimPart.Position
+                local newCFrame = CFrame.new(Camera.CFrame.Position, aimPosition)
+                Camera.CFrame = Camera.CFrame:Lerp(newCFrame, getgenv().AimSettings.Smoothness)
+                
+                FOVFilled.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+                UIStroke.Color = Color3.fromRGB(0, 255, 0)
+                return
+            end
+        end
+    end
+
+    FOVFilled.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    UIStroke.Color = Color3.fromRGB(255, 0, 0)
+end)
 
 -- Triggerbot UI Elements
 local TriggerbotGroup = Tabs["Combat"]:AddRightGroupbox("Triggerbot Settings")
@@ -287,232 +601,54 @@ TriggerbotGroup:AddDropdown("TriggerCircleType", {
     end
 })
 
--- Aimbot script logic
-local Players, UserInputService, RunService, GuiService = game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService"), game:GetService("GuiService")
-local LocalPlayer, Mouse, Camera, CFrameNew, Vector3New, Vector2New = Players.LocalPlayer, Players.LocalPlayer:GetMouse(), workspace.CurrentCamera, CFrame.new, Vector3.new, Vector2.new
-local DrawingEnabled, Aiming = true, false
-local TargetPlayer
-local LastPosition, LastTick, PredictedPosition
-
-local AimbotFOV = Instance.new("ScreenGui")
-AimbotFOV.Parent = game.CoreGui
-AimbotFOV.Name = "AimbotFOV"
-
-local FOVFilled = Instance.new("Frame")
-FOVFilled.Size = UDim2.new(0, getgenv().AimSettings.FOV, 0, getgenv().AimSettings.FOV)
-FOVFilled.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-FOVFilled.BackgroundTransparency = 0.7
-FOVFilled.BorderSizePixel = 0
-FOVFilled.Parent = AimbotFOV
-local UICornerFilled = Instance.new("UICorner")
-UICornerFilled.CornerRadius = UDim.new(0.5, 0)
-UICornerFilled.Parent = FOVFilled
-
-local FOVOutline = Instance.new("ImageLabel")
-FOVOutline.Size = UDim2.new(0, getgenv().AimSettings.FOV, 0, getgenv().AimSettings.FOV)
-FOVOutline.BackgroundTransparency = 1
-FOVOutline.Image = "rbxassetid://0"
-FOVOutline.BorderSizePixel = 0
-FOVOutline.Parent = AimbotFOV
-local UIStroke = Instance.new("UIStroke")
-UIStroke.Thickness = 2
-UIStroke.Color = Color3.fromRGB(255, 0, 0)
-UIStroke.Parent = FOVOutline
-local UICornerOutline = Instance.new("UICorner")
-UICornerOutline.CornerRadius = UDim.new(0.5, 0)
-UICornerOutline.Parent = FOVOutline
-
-local function WorldToViewportPoint(position)
-    return Camera:WorldToViewportPoint(position)
-end
-
-local function FindTarget()
-    if not getgenv().AimSettings.Enabled then return nil end
-    local closestPlayer, closestDistance = nil, math.huge
-    local fovRadius = getgenv().AimSettings.FOV / 2
-
-    for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            if not getgenv().AimSettings.TeamCheck or player.Team ~= LocalPlayer.Team then
-                local targetPos = player.Character.HumanoidRootPart.Position
-                local screenPos, onScreen = WorldToViewportPoint(targetPos)
-                local distance = (Vector2New(Mouse.X, Mouse.Y) - Vector2New(screenPos.X, screenPos.Y)).Magnitude
-                
-                if distance <= fovRadius and onScreen then
-                    if distance < closestDistance then
-                        closestDistance = distance
-                        closestPlayer = player
-                    end
-                end
-            end
-        end
-    end
-    return closestPlayer
-end
-
-local function PredictPosition(target)
-    if target and target.Character and target.Character:FindFirstChild("Humanoid") then
-        local aimPart = target.Character:FindFirstChild(getgenv().AimSettings.AimPart)
-        if not aimPart then return nil end
-        local currentPos = aimPart.Position
-        
-        if not LastPosition or not LastTick then
-            LastPosition = currentPos
-            LastTick = tick()
-            PredictedPosition = currentPos
-            return PredictedPosition
-        end
-
-        local currentTick = tick()
-        local deltaTime = currentTick - LastTick
-        
-        if getgenv().AimSettings.ResolverMode == "Velocity" then
-            local velocity = aimPart.Velocity
-            PredictedPosition = currentPos + Vector3New(velocity.X * getgenv().AimSettings.predictionXZ, velocity.Y * getgenv().AimSettings.predictionY, velocity.Z * getgenv().AimSettings.predictionXZ)
-        elseif getgenv().AimSettings.ResolverMode == "Move direction" then
-            PredictedPosition = currentPos + (target.Character.Humanoid.MoveDirection * (getgenv().AimSettings.predictionXZ * 10))
-        elseif getgenv().AimSettings.ResolverMode == "Calculate CFrame" then
-            if (currentPos - LastPosition).Magnitude < 0.001 then
-                PredictedPosition = currentPos 
-            else
-                local distance = (currentPos - LastPosition).Magnitude
-                local speed = (distance / deltaTime) * (0.1 * (getgenv().AimSettings.predictionXZ * 10))
-                PredictedPosition = currentPos + (currentPos - LastPosition).Unit * speed
-                local verticalSpeed = (currentPos.Y - LastPosition.Y) / deltaTime * (0.1 * getgenv().AimSettings.predictionY)
-                PredictedPosition = PredictedPosition + Vector3New(0, verticalSpeed, 0)
-            end
-        end
-        
-        LastTick = currentTick
-        LastPosition = currentPos
-        return PredictedPosition
-    end
-    return nil
-end
-
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode[string.upper(getgenv().AimSettings.AimlockKey)] then
-        if not Aiming then
-            Aiming = true
-            TargetPlayer = FindTarget()
-        else
-            Aiming = false
-            TargetPlayer = nil
-        end
-    end
-end)
-
-RunService.RenderStepped:Connect(function()
-    local fovPosition = UDim2.new(0, Mouse.X - getgenv().AimSettings.FOV/2, 0, Mouse.Y - getgenv().AimSettings.FOV/2)
-    FOVFilled.Position = fovPosition
-    FOVOutline.Position = fovPosition
-
-    FOVFilled.Size = UDim2.new(0, getgenv().AimSettings.FOV, 0, getgenv().AimSettings.FOV)
-    FOVOutline.Size = UDim2.new(0, getgenv().AimSettings.FOV, 0, getgenv().AimSettings.FOV)
-
-    FOVFilled.Visible = getgenv().AimSettings.FOVVisible and getgenv().AimSettings.FOVType == "Filled"
-    FOVOutline.Visible = getgenv().AimSettings.FOVVisible and getgenv().AimSettings.FOVType == "Outline"
-
-    if DrawingEnabled and Aiming and TargetPlayer and TargetPlayer.Character and TargetPlayer.Character:FindFirstChild(getgenv().AimSettings.AimPart) then
-        local aimPosition = getgenv().AimSettings.PredictMovement and PredictPosition(TargetPlayer) or TargetPlayer.Character[getgenv().AimSettings.AimPart].Position
-        local newCFrame = CFrameNew(Camera.CFrame.Position, aimPosition)
-        Camera.CFrame = Camera.CFrame:Lerp(newCFrame, getgenv().AimSettings.Smoothness)
-        FOVFilled.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        UIStroke.Color = Color3.fromRGB(0, 255, 0)
-    else
-        FOVFilled.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        UIStroke.Color = Color3.fromRGB(255, 0, 0)
-    end
-end)
-
 -- Triggerbot Logic
-local Workspace = game:GetService("Workspace")
-local RunService = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
-local Camera = Workspace.CurrentCamera
 local LastActivationTime = tick()
-
--- Получаем высоту верхней панели один раз (нужно для корректировки в режиме Center of Screen)
 local GuiInset = GuiService:GetGuiInset()
-local TopbarOffset = GuiInset.Y -- Обычно около 36 пикселей
+local TopbarOffset = GuiInset.Y
 
--- Безопасное создание GUI
-local function CreateSafeGui(name, ignoreGuiInset)
-    local success, gui = pcall(function()
-        local screenGui = Instance.new("ScreenGui")
-        screenGui.Name = name
-        screenGui.Parent = game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
-        screenGui.IgnoreGuiInset = ignoreGuiInset
-        return screenGui
-    end)
-    return success and gui or nil
-end
+local CenterTriggerbotFOV = Instance.new("ScreenGui")
+CenterTriggerbotFOV.Name = "CenterTriggerbotFOV"
+CenterTriggerbotFOV.Parent = game.CoreGui
+CenterTriggerbotFOV.IgnoreGuiInset = true
 
--- GUI для режима "Center of Screen" (с IgnoreGuiInset = true)
-local CenterTriggerbotFOV = CreateSafeGui("CenterTriggerbotFOV", true)
-if not CenterTriggerbotFOV then
-    warn("Failed to create CenterTriggerbotFOV GUI")
-    return
-end
+local MouseTriggerbotFOV = Instance.new("ScreenGui")
+MouseTriggerbotFOV.Name = "MouseTriggerbotFOV"
+MouseTriggerbotFOV.Parent = game.CoreGui
+MouseTriggerbotFOV.IgnoreGuiInset = false
 
--- GUI для режима "Mouse Position" (с IgnoreGuiInset = false, как в предыдущей версии)
-local MouseTriggerbotFOV = CreateSafeGui("MouseTriggerbotFOV", false)
-if not MouseTriggerbotFOV then
-    warn("Failed to create MouseTriggerbotFOV GUI")
-    return
-end
-
--- Создание элементов с защитой от ошибок
 local function CreateCircle(name, filled, parent)
-    return pcall(function()
-        local element = filled and Instance.new("Frame") or Instance.new("ImageLabel")
-        element.Name = name
-        element.Size = UDim2.new(0, getgenv().TriggerbotSettings.Radius * 2, 0, getgenv().TriggerbotSettings.Radius * 2)
-        element.AnchorPoint = Vector2.new(0.5, 0.5) -- Устанавливаем AnchorPoint в центр
-        
-        if filled then
-            element.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            element.BackgroundTransparency = 0.7
-        else
-            element.BackgroundTransparency = 1
-            element.Image = "rbxassetid://0"
-            local stroke = Instance.new("UIStroke")
-            stroke.Thickness = 2
-            stroke.Color = Color3.fromRGB(255, 255, 255)
-            stroke.Parent = element
-        end
-        
-        element.BorderSizePixel = 0
-        element.Parent = parent
-        
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0.5, 0)
-        corner.Parent = element
-        
-        return element
-    end)
+    local element = filled and Instance.new("Frame") or Instance.new("ImageLabel")
+    element.Name = name
+    element.Size = UDim2.new(0, getgenv().TriggerbotSettings.Radius * 2, 0, getgenv().TriggerbotSettings.Radius * 2)
+    element.AnchorPoint = Vector2.new(0.5, 0.5)
+    
+    if filled then
+        element.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        element.BackgroundTransparency = 0.7
+    else
+        element.BackgroundTransparency = 1
+        element.Image = "rbxassetid://0"
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness = 2
+        stroke.Color = Color3.fromRGB(255, 255, 255)
+        stroke.Parent = element
+    end
+    
+    element.BorderSizePixel = 0
+    element.Parent = parent
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0.5, 0)
+    corner.Parent = element
+    
+    return element
 end
 
--- Круги для режима "Center of Screen"
-local successCenterFilled, CenterFilled = CreateCircle("CenterFilled", true, CenterTriggerbotFOV)
-local successCenterOutline, CenterOutline = CreateCircle("CenterOutline", false, CenterTriggerbotFOV)
+local CenterFilled = CreateCircle("CenterFilled", true, CenterTriggerbotFOV)
+local CenterOutline = CreateCircle("CenterOutline", false, CenterTriggerbotFOV)
+local MouseFilled = CreateCircle("MouseFilled", true, MouseTriggerbotFOV)
+local MouseOutline = CreateCircle("MouseOutline", false, MouseTriggerbotFOV)
 
-if not successCenterFilled or not successCenterOutline then
-    warn("Failed to create Center trigger circles")
-    return
-end
-
--- Круги для режима "Mouse Position"
-local successMouseFilled, MouseFilled = CreateCircle("MouseFilled", true, MouseTriggerbotFOV)
-local successMouseOutline, MouseOutline = CreateCircle("MouseOutline", false, MouseTriggerbotFOV)
-
-if not successMouseFilled or not successMouseOutline then
-    warn("Failed to create Mouse trigger circles")
-    return
-end
-
--- Функция проверки стен
 local function WallCheck(part)
     local origin = Camera.CFrame.Position
     local target = part.Position
@@ -533,19 +669,11 @@ local function WallCheck(part)
     return true
 end
 
--- Основной цикл Triggerbot
 local function UpdateTriggerbot()
-    -- Проверка активности триггербота в зависимости от режима
-    local isActive = false
-    if getgenv().TriggerbotSettings.Enabled then
-        if getgenv().TriggerbotSettings.Mode == "Always" then
-            isActive = true
-        elseif getgenv().TriggerbotSettings.Mode == "Toggle" then
-            isActive = getgenv().TriggerbotSettings.ToggleState
-        end
-    end
-
-    -- Скрываем все круги, если триггербот неактивен
+    local isActive = getgenv().TriggerbotSettings.Enabled and 
+        (getgenv().TriggerbotSettings.Mode == "Always" or 
+         (getgenv().TriggerbotSettings.Mode == "Toggle" and getgenv().TriggerbotSettings.ToggleState))
+    
     if not isActive then
         CenterFilled.Visible = false
         CenterOutline.Visible = false
@@ -554,49 +682,32 @@ local function UpdateTriggerbot()
         return
     end
 
-    -- Определяем точку прицеливания в зависимости от TargetMode
-    local targetPos
-    local circlePos
-    local activeFilled, activeOutline
-
+    local targetPos, circlePos, activeFilled, activeOutline
     if getgenv().TriggerbotSettings.TargetMode == "Center of Screen" then
-        -- Используем круги для режима "Center of Screen"
         activeFilled = CenterFilled
         activeOutline = CenterOutline
-        -- Скрываем круги для "Mouse Position"
         MouseFilled.Visible = false
         MouseOutline.Visible = false
-        -- Центрируем круг относительно видимой области (IgnoreGuiInset = true)
         targetPos = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        circlePos = UDim2.new(0.5, 0, 0.5, 0) -- 50% ширины и высоты видимой области
-    else -- "Mouse Position"
-        -- Используем круги для режима "Mouse Position"
+        circlePos = UDim2.new(0.5, 0, 0.5, 0)
+    else
         activeFilled = MouseFilled
         activeOutline = MouseOutline
-        -- Скрываем круги для "Center of Screen"
         CenterFilled.Visible = false
         CenterOutline.Visible = false
-        -- Используем логику из предыдущей версии (без корректировок на верхнюю панель)
         targetPos = Vector2.new(Mouse.X, Mouse.Y)
         circlePos = UDim2.new(0, Mouse.X, 0, Mouse.Y)
     end
 
-    -- Устанавливаем позицию активных кругов
     activeFilled.Position = circlePos
     activeOutline.Position = circlePos
     
-    -- Обновление размера
     activeFilled.Size = UDim2.new(0, getgenv().TriggerbotSettings.Radius * 2, 0, getgenv().TriggerbotSettings.Radius * 2)
     activeOutline.Size = UDim2.new(0, getgenv().TriggerbotSettings.Radius * 2, 0, getgenv().TriggerbotSettings.Radius * 2)
     
-    -- Обновление видимости
-    local showFilled = getgenv().TriggerbotSettings.CircleVisible and getgenv().TriggerbotSettings.CircleType == "Filled"
-    local showOutline = getgenv().TriggerbotSettings.CircleVisible and getgenv().TriggerbotSettings.CircleType == "Outline"
+    activeFilled.Visible = getgenv().TriggerbotSettings.CircleVisible and getgenv().TriggerbotSettings.CircleType == "Filled"
+    activeOutline.Visible = getgenv().TriggerbotSettings.CircleVisible and getgenv().TriggerbotSettings.CircleType == "Outline"
     
-    activeFilled.Visible = showFilled
-    activeOutline.Visible = showOutline
-    
-    -- Поиск цели
     local targetFound = false
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
@@ -614,7 +725,6 @@ local function UpdateTriggerbot()
         end
     end
     
-    -- Обработка триггера
     if targetFound then
         if tick() - LastActivationTime >= getgenv().TriggerbotSettings.Delay then
             local character = LocalPlayer.Character
@@ -640,40 +750,27 @@ local function UpdateTriggerbot()
     end
 end
 
--- Запуск обновления
 RunService.RenderStepped:Connect(UpdateTriggerbot)
 
--- Добавляем Rapid Fire в существующую вкладку Combat
-local RapidFireGroup = Tabs["Combat"]:AddRightGroupbox("Rapid Fire") -- Группа справа от триггербота
+-- Rapid Fire
+local RapidFireGroup = Tabs["Combat"]:AddRightGroupbox("Rapid Fire")
 
--- Создаем Toggle для Rapid Fire
 local RapidFireToggle = RapidFireGroup:AddToggle("RapidFireToggle", {
     Text = "Enable Rapid Fire",
     Default = false,
     Tooltip = "Hold m1 to shoot",
     Callback = function(Value)
         getgenv().RapidFireEnabled = Value
-        if Value then
-            Library:Notify("Rapid Fire включен", 2)
-        else
-            Library:Notify("Rapid Fire выключен", 2)
-        end
+        Library:Notify("Rapid Fire " .. (Value and "включен" or "выключен"), 2)
     end
 })
 
--- Модифицированный скрипт Rapid Fire с интеграцией в Toggle
 do
-    local Players = game:GetService("Players")
-    local UserInputService = game:GetService("UserInputService")
-    local RunService = game:GetService("RunService")
-
-    local LocalPlayer = Players.LocalPlayer
     local firing = false
     local debounce = false
-    local minFireDelay = 0.05 -- Минимальная задержка между выстрелами
+    local minFireDelay = 0.05
 
-    -- Безопасная активация оружия
-    local function safeActivate(tool)
+    local function SAFEACTIVATE(tool)
         if not debounce and tool and tool:IsA("Tool") and getgenv().RapidFireEnabled then
             debounce = true
             pcall(function()
@@ -684,19 +781,17 @@ do
         end
     end
 
-    -- Основной цикл стрельбы
     local function fireLoop()
         while firing and getgenv().RapidFireEnabled do
             local character = LocalPlayer.Character
             if character then
                 local tool = character:FindFirstChildOfClass("Tool")
-                safeActivate(tool)
+                SAFEACTIVATE(tool)
             end
             RunService.Heartbeat:Wait()
         end
     end
 
-    -- Обработчики ввода
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if not gameProcessed and input.UserInputType == Enum.UserInputType.MouseButton1 then
             firing = true
@@ -712,24 +807,21 @@ do
         end
     end)
 
-    -- Оптимизированный обработчик смены оружия
     local function setupCharacter(character)
         character.ChildAdded:Connect(function(child)
             if child:IsA("Tool") then
                 child.Activated:Connect(function()
                     if firing and getgenv().RapidFireEnabled then
-                        safeActivate(child)
+                        SAFEACTIVATE(child)
                     end
                 end)
             end
         end)
     end
 
-    -- Инициализация
     if LocalPlayer.Character then
         setupCharacter(LocalPlayer.Character)
     end
-
     LocalPlayer.CharacterAdded:Connect(function(character)
         character:WaitForChild("Humanoid")
         setupCharacter(character)
