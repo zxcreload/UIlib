@@ -1180,6 +1180,316 @@ LocalPlayer.AncestryChanged:Connect(function()
     stopProAim()
 end)
 
+-- Target Strafe Settings
+local TargetStrafeGroup = Tabs["Combat"]:AddRightGroupbox("Target Strafe Settings")
+
+-- Глобальные настройки для Target Strafe
+getgenv().TargetStrafeSettings = {
+    Enabled = false,
+    Keybind = "G",
+    TargetPlayer = nil,
+    StrafeType = "Custom", -- "Custom", "Random", "Upwoake"
+    CustomDistance = 10, -- Расстояние для Custom
+    CustomSpeed = 5, -- Скорость для Custom
+    CustomY = 0, -- Координата Y для Custom
+    RandomDistance = 50, -- Расстояние для Random
+    RandomSpeed = 5, -- Скорость для Random (новое)
+    UpwoakeSpeed = 100, -- Скорость для Upwoake
+    UpwoakeDistance = 10 -- Дальность для Upwoake
+}
+
+local strafeActive = false
+local strafeConnection
+local originalPosition -- Для сохранения позиции локального игрока
+
+-- Функция для поиска корневой части персонажа
+local function findRootPart(character)
+    local rootPart = character:FindFirstChild("HumanoidRootPart") or
+                     character:FindFirstChild("Torso") or
+                     character:FindFirstChild("UpperTorso") or
+                     character:FindFirstChild("LowerTorso")
+    if not rootPart then
+        for _, part in pairs(character:GetChildren()) do
+            if part:IsA("BasePart") and string.find(part.Name:lower(), "torso") then
+                rootPart = part
+                break
+            end
+        end
+    end
+    return rootPart
+end
+
+-- Основная логика стрейфа
+local function updateStrafe()
+    if not strafeActive or not getgenv().TargetStrafeSettings.Enabled then return end
+    
+    local target = Players:FindFirstChild(getgenv().TargetStrafeSettings.TargetPlayer)
+    if not target or not target.Character then return end
+    
+    local targetRoot = findRootPart(target.Character)
+    local localRoot = findRootPart(LocalPlayer.Character)
+    if not targetRoot or not localRoot then return end
+    
+    local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
+    if humanoid and humanoid.Health <= 0 then return end
+    
+    -- Сохраняем исходную позицию перед первым движением
+    if not originalPosition then
+        originalPosition = localRoot.Position
+    end
+    
+    local time = tick()
+    local angle = time * getgenv().TargetStrafeSettings.CustomSpeed -- Базовая скорость
+    
+    if getgenv().TargetStrafeSettings.StrafeType == "Custom" then
+        local distance = getgenv().TargetStrafeSettings.CustomDistance
+        local yOffset = getgenv().TargetStrafeSettings.CustomY
+        local newPosition = targetRoot.Position + Vector3.new(
+            math.cos(angle) * distance,
+            yOffset,
+            math.sin(angle) * distance
+        )
+        localRoot.CFrame = CFrame.new(newPosition, targetRoot.Position)
+        
+    elseif getgenv().TargetStrafeSettings.StrafeType == "Random" then
+        local distance = getgenv().TargetStrafeSettings.RandomDistance
+        local speed = getgenv().TargetStrafeSettings.RandomSpeed
+        local randomAngle = math.random(0, 2 * math.pi)
+        local newPosition = targetRoot.Position + Vector3.new(
+            math.cos(randomAngle + time * speed) * distance,
+            math.sin(time * speed) * 5, -- Небольшое колебание по Y
+            math.sin(randomAngle + time * speed) * distance
+        )
+        localRoot.CFrame = CFrame.new(newPosition, targetRoot.Position)
+        
+    elseif getgenv().TargetStrafeSettings.StrafeType == "Upwoake" then
+        local distance = getgenv().TargetStrafeSettings.UpwoakeDistance
+        local speed = getgenv().TargetStrafeSettings.UpwoakeSpeed / 10 -- Уменьшаем делитель для более заметной скорости
+        local height = math.abs(math.sin(time * speed)) * distance -- Полусфера вверх
+        local newPosition = targetRoot.Position + Vector3.new(
+            math.cos(angle * speed) * distance,
+            height,
+            math.sin(angle * speed) * distance
+        )
+        localRoot.CFrame = CFrame.new(newPosition, targetRoot.Position)
+    end
+end
+
+-- Запуск стрейфа
+local function startStrafe()
+    if not strafeActive then
+        strafeActive = true
+        strafeConnection = RunService.Heartbeat:Connect(updateStrafe)
+    end
+end
+
+-- Остановка стрейфа с возвратом на исходную позицию
+local function stopStrafe()
+    if strafeActive then
+        strafeActive = false
+        if strafeConnection then
+            strafeConnection:Disconnect()
+            strafeConnection = nil
+        end
+        -- Возвращаем локального игрока на исходную позицию
+        local localRoot = findRootPart(LocalPlayer.Character)
+        if localRoot and originalPosition then
+            localRoot.CFrame = CFrame.new(originalPosition)
+        end
+        originalPosition = nil
+    end
+end
+
+-- UI элементы для Target Strafe
+local StrafeToggle = TargetStrafeGroup:AddToggle("StrafeEnabled", {
+    Text = "Enable Strafe",
+    Default = getgenv().TargetStrafeSettings.Enabled,
+    Tooltip = "Enable/Disable Target Strafe",
+    Callback = function(Value)
+        getgenv().TargetStrafeSettings.Enabled = Value
+        if not Value then
+            stopStrafe()
+        end
+    end
+})
+
+local StrafeKeybind = StrafeToggle:AddKeyPicker("StrafeKeybind", {
+    Default = getgenv().TargetStrafeSettings.Keybind,
+    Mode = "Toggle",
+    Text = "Strafe Key",
+    NoUI = false,
+    Callback = function(Value)
+        if getgenv().TargetStrafeSettings.Enabled then
+            if strafeActive then
+                stopStrafe()
+            else
+                startStrafe()
+            end
+        end
+    end,
+    ChangedCallback = function(NewKey)
+        getgenv().TargetStrafeSettings.Keybind = tostring(NewKey):lower()
+    end
+})
+
+-- Динамическое обновление списка игроков
+local function updatePlayerList()
+    local playerNames = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(playerNames, player.Name)
+        end
+    end
+    return playerNames
+end
+
+local StrafeTargetDropdown = TargetStrafeGroup:AddDropdown("StrafeTarget", {
+    Values = updatePlayerList(),
+    Default = getgenv().TargetStrafeSettings.TargetPlayer,
+    Multi = false,
+    Text = "Target Player",
+    Tooltip = "Select target player for strafe",
+    Callback = function(Value)
+        getgenv().TargetStrafeSettings.TargetPlayer = Value
+    end
+})
+
+-- Тип стрейфа
+local StrafeTypeDropdown = TargetStrafeGroup:AddDropdown("StrafeType", {
+    Values = {"Custom", "Random", "Upwoake"},
+    Default = getgenv().TargetStrafeSettings.StrafeType,
+    Multi = false,
+    Text = "Strafe Type",
+    Tooltip = "Select strafe movement type",
+    Callback = function(Value)
+        getgenv().TargetStrafeSettings.StrafeType = Value
+    end
+})
+
+-- Настройки для Custom
+local CustomDistanceSlider = TargetStrafeGroup:AddSlider("CustomDistance", {
+    Text = "Custom Distance",
+    Default = getgenv().TargetStrafeSettings.CustomDistance,
+    Min = 5,
+    Max = 50,
+    Rounding = 1,
+    Compact = false,
+    Suffix = " studs",
+    Callback = function(Value)
+        getgenv().TargetStrafeSettings.CustomDistance = Value
+    end
+})
+
+local CustomSpeedSlider = TargetStrafeGroup:AddSlider("CustomSpeed", {
+    Text = "Custom Speed",
+    Default = getgenv().TargetStrafeSettings.CustomSpeed,
+    Min = 1,
+    Max = 20,
+    Rounding = 1,
+    Compact = false,
+    Callback = function(Value)
+        getgenv().TargetStrafeSettings.CustomSpeed = Value
+    end
+})
+
+local CustomYSlider = TargetStrafeGroup:AddSlider("CustomY", {
+    Text = "Custom Y Offset",
+    Default = getgenv().TargetStrafeSettings.CustomY,
+    Min = -20,
+    Max = 20,
+    Rounding = 1,
+    Compact = false,
+    Suffix = " studs",
+    Callback = function(Value)
+        getgenv().TargetStrafeSettings.CustomY = Value
+    end
+})
+
+-- Настройки для Random
+local RandomDistanceSlider = TargetStrafeGroup:AddSlider("RandomDistance", {
+    Text = "Random Distance",
+    Default = getgenv().TargetStrafeSettings.RandomDistance,
+    Min = 5,
+    Max = 1000,
+    Rounding = 0,
+    Compact = false,
+    Suffix = " studs",
+    Callback = function(Value)
+        getgenv().TargetStrafeSettings.RandomDistance = Value
+    end
+})
+
+local RandomSpeedSlider = TargetStrafeGroup:AddSlider("RandomSpeed", {
+    Text = "Random Speed",
+    Default = getgenv().TargetStrafeSettings.RandomSpeed,
+    Min = 1,
+    Max = 20,
+    Rounding = 1,
+    Compact = false,
+    Callback = function(Value)
+        getgenv().TargetStrafeSettings.RandomSpeed = Value
+    end
+})
+
+-- Настройки для Upwoake
+local UpwoakeSpeedSlider = TargetStrafeGroup:AddSlider("UpwoakeSpeed", {
+    Text = "Upwoake Speed",
+    Default = getgenv().TargetStrafeSettings.UpwoakeSpeed,
+    Min = 1,
+    Max = 10000,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        getgenv().TargetStrafeSettings.UpwoakeSpeed = Value
+    end
+})
+
+local UpwoakeDistanceSlider = TargetStrafeGroup:AddSlider("UpwoakeDistance", {
+    Text = "Upwoake Distance",
+    Default = getgenv().TargetStrafeSettings.UpwoakeDistance,
+    Min = 5,
+    Max = 50,
+    Rounding = 1,
+    Compact = false,
+    Suffix = " studs",
+    Callback = function(Value)
+        getgenv().TargetStrafeSettings.UpwoakeDistance = Value
+    end
+})
+
+-- Обработка событий для списка игроков
+Players.PlayerAdded:Connect(function()
+    StrafeTargetDropdown:SetValues(updatePlayerList())
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    StrafeTargetDropdown:SetValues(updatePlayerList())
+    if getgenv().TargetStrafeSettings.TargetPlayer == player.Name then
+        getgenv().TargetStrafeSettings.TargetPlayer = nil
+        StrafeTargetDropdown:SetValue(nil)
+        stopStrafe()
+    end
+end)
+
+-- Проверка смерти цели
+RunService.Heartbeat:Connect(function()
+    if getgenv().TargetStrafeSettings.Enabled and getgenv().TargetStrafeSettings.TargetPlayer then
+        local target = Players:FindFirstChild(getgenv().TargetStrafeSettings.TargetPlayer)
+        if target and target.Character then
+            local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health <= 0 then
+                stopStrafe()
+            end
+        else
+            stopStrafe()
+        end
+    end
+end)
+
+-- Очистка при выходе игрока
+LocalPlayer.AncestryChanged:Connect(function()
+    stopStrafe()
+end)
 
 -- Setup ThemeManager and SaveManager
 ThemeManager:SetLibrary(Library)
