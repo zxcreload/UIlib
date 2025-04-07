@@ -67,5 +67,3 @@ LocalPlayer.CharacterAdded:Connect(function(character)
     character:WaitForChild("Humanoid")
     setupCharacter(character)
 end)
-
-print("Оптимизированный авто-файр активирован (без лагов)")
