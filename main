@@ -643,6 +643,99 @@ end
 -- Запуск обновления
 RunService.RenderStepped:Connect(UpdateTriggerbot)
 
+-- Добавляем Rapid Fire в существующую вкладку Combat
+local RapidFireGroup = Tabs["Combat"]:AddRightGroupbox("Rapid Fire") -- Группа справа от триггербота
+
+-- Создаем Toggle для Rapid Fire
+local RapidFireToggle = RapidFireGroup:AddToggle("RapidFireToggle", {
+    Text = "Enable Rapid Fire",
+    Default = false,
+    Tooltip = "Hold m1 to shoot",
+    Callback = function(Value)
+        getgenv().RapidFireEnabled = Value
+        if Value then
+            Library:Notify("Rapid Fire включен", 2)
+        else
+            Library:Notify("Rapid Fire выключен", 2)
+        end
+    end
+})
+
+-- Модифицированный скрипт Rapid Fire с интеграцией в Toggle
+do
+    local Players = game:GetService("Players")
+    local UserInputService = game:GetService("UserInputService")
+    local RunService = game:GetService("RunService")
+
+    local LocalPlayer = Players.LocalPlayer
+    local firing = false
+    local debounce = false
+    local minFireDelay = 0.05 -- Минимальная задержка между выстрелами
+
+    -- Безопасная активация оружия
+    local function safeActivate(tool)
+        if not debounce and tool and tool:IsA("Tool") and getgenv().RapidFireEnabled then
+            debounce = true
+            pcall(function()
+                tool:Activate()
+            end)
+            task.wait(minFireDelay)
+            debounce = false
+        end
+    end
+
+    -- Основной цикл стрельбы
+    local function fireLoop()
+        while firing and getgenv().RapidFireEnabled do
+            local character = LocalPlayer.Character
+            if character then
+                local tool = character:FindFirstChildOfClass("Tool")
+                safeActivate(tool)
+            end
+            RunService.Heartbeat:Wait()
+        end
+    end
+
+    -- Обработчики ввода
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.UserInputType == Enum.UserInputType.MouseButton1 then
+            firing = true
+            if getgenv().RapidFireEnabled then
+                fireLoop()
+            end
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            firing = false
+        end
+    end)
+
+    -- Оптимизированный обработчик смены оружия
+    local function setupCharacter(character)
+        character.ChildAdded:Connect(function(child)
+            if child:IsA("Tool") then
+                child.Activated:Connect(function()
+                    if firing and getgenv().RapidFireEnabled then
+                        safeActivate(child)
+                    end
+                end)
+            end
+        end)
+    end
+
+    -- Инициализация
+    if LocalPlayer.Character then
+        setupCharacter(LocalPlayer.Character)
+    end
+
+    LocalPlayer.CharacterAdded:Connect(function(character)
+        character:WaitForChild("Humanoid")
+        setupCharacter(character)
+    end)
+end
+
 -- Setup ThemeManager and SaveManager
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
