@@ -1,0 +1,272 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Проверяем доступность Drawing API для FOV
+local Drawing = Drawing -- Обычно Drawing доступен как глобальная переменная в эксплойтах
+
+local isActive = false
+local connection -- Для основного цикла ProAim
+local fovConnection -- Для обновления позиции FOV
+local targetPlayer = nil
+local targetRootPart = nil -- Корневая часть цели (HumanoidRootPart, Torso и т.д.)
+local targetESP = nil -- ESP для корневой части
+local originalCFrame = nil -- Оригинальная позиция корневой части
+local wasAnchored = false -- Для сохранения состояния Anchored
+local wasCanCollide = false -- Для сохранения состояния CanCollide
+
+-- Настройки FOV
+local fovRadius = 300
+local fovCircle = nil
+
+if Drawing then
+    fovCircle = Drawing.new("Circle")
+    fovCircle.Radius = fovRadius
+    fovCircle.Thickness = 2
+    fovCircle.Color = Color3.fromRGB(255, 255, 255)
+    fovCircle.Filled = false
+    fovCircle.Visible = true -- FOV виден всегда
+end
+
+-- Функция для создания 3D Box ESP
+local function createESP(part, color, name)
+    if not part or not part.Parent then
+        return nil
+    end
+    local esp = Instance.new("BoxHandleAdornment")
+    esp.Name = name
+    esp.Adornee = part
+    esp.AlwaysOnTop = true
+    esp.ZIndex = 10
+    esp.Size = part.Size + Vector3.new(0.1, 0.1, 0.1)
+    esp.Transparency = 0.5
+    esp.Color3 = color
+    esp.Parent = part
+    return esp
+end
+
+-- Функция для удаления ESP
+local function clearESP()
+    if targetESP then
+        targetESP:Destroy()
+        targetESP = nil
+    end
+end
+
+-- Функция для поиска корневой части персонажа
+local function findRootPart(character)
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then
+        rootPart = character:FindFirstChild("Torso") -- Проверяем Torso для R6 моделей
+    end
+    if not rootPart then
+        rootPart = character:FindFirstChild("UpperTorso") -- Проверяем UpperTorso для R15 моделей
+    end
+    if not rootPart then
+        rootPart = character:FindFirstChild("LowerTorso") -- Проверяем LowerTorso для R15 моделей
+    end
+    if not rootPart then
+        for _, part in pairs(character:GetChildren()) do
+            if part:IsA("BasePart") and string.find(part.Name:lower(), "torso") then
+                rootPart = part
+                break
+            end
+        end
+    end
+    return rootPart
+end
+
+-- Функция для поиска ближайшего к курсору игрока в пределах FOV
+local function findClosestPlayerToCursor()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    local mousePosition = UserInputService:GetMouseLocation()
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local rootPart = findRootPart(player.Character)
+            if rootPart then
+                local screenPoint = workspace.CurrentCamera:WorldToScreenPoint(rootPart.Position)
+                local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - mousePosition).Magnitude
+                if not Drawing or distance <= fovRadius then -- Если Drawing недоступен, игнорируем FOV
+                    if distance < shortestDistance then
+                        shortestDistance = distance
+                        closestPlayer = player
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+-- Функция для перемещения модели цели
+local function updateTargetPosition()
+    if not targetPlayer or not targetPlayer.Parent then
+        targetPlayer = nil
+        clearESP()
+        return
+    end
+    
+    if not targetPlayer.Character or not targetPlayer.Character.Parent then
+        targetPlayer = nil
+        clearESP()
+        return
+    end
+    
+    if not LocalPlayer.Character or not findRootPart(LocalPlayer.Character) then 
+        return 
+    end
+    
+    targetRootPart = findRootPart(targetPlayer.Character)
+    if not targetRootPart then
+        targetPlayer = nil
+        clearESP()
+        return
+    end
+    
+    -- Сохраняем оригинальную CFrame, если ещё не сохранена
+    if not originalCFrame then
+        originalCFrame = targetRootPart.CFrame
+    end
+    
+    -- Проверяем, закреплён ли targetRootPart
+    if targetRootPart.Anchored then
+        wasAnchored = true
+        targetRootPart.Anchored = false
+    else
+        wasAnchored = false
+    end
+    
+    -- Отключаем CanCollide, чтобы избежать столкновений
+    if targetRootPart.CanCollide then
+        wasCanCollide = true
+        targetRootPart.CanCollide = false
+    else
+        wasCanCollide = false
+    end
+    
+    -- Перемещаем модель цели к локальному игроку (10 единиц)
+    local localPlayerRootPart = findRootPart(LocalPlayer.Character)
+    local offsetPosition = localPlayerRootPart.Position + (localPlayerRootPart.CFrame.LookVector * 10)
+    targetRootPart.CFrame = CFrame.new(offsetPosition)
+    
+    -- Обновляем ESP
+    clearESP()
+    targetESP = createESP(targetRootPart, Color3.new(1, 0, 0), "TargetESP")
+end
+
+-- Основной цикл
+local function startProAim()
+    if not isActive then
+        isActive = true
+        connection = RunService.Heartbeat:Connect(function()
+            -- Находим ближайшего к курсору игрока
+            local closestPlayer = findClosestPlayerToCursor()
+            
+            -- Если цель изменилась или пропала
+            if closestPlayer ~= targetPlayer then
+                -- Если была предыдущая цель, возвращаем её на место
+                if targetPlayer and targetRootPart and originalCFrame then
+                    targetRootPart.CFrame = originalCFrame
+                    if wasAnchored then
+                        targetRootPart.Anchored = true
+                    end
+                    if wasCanCollide then
+                        targetRootPart.CanCollide = true
+                    end
+                    originalCFrame = nil
+                end
+                targetPlayer = closestPlayer
+                clearESP()
+            end
+            
+            -- Обновляем позицию модели цели
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character.Parent then
+                updateTargetPosition()
+            else
+                if targetPlayer and targetRootPart and originalCFrame then
+                    targetRootPart.CFrame = originalCFrame
+                    if wasAnchored then
+                        targetRootPart.Anchored = true
+                    end
+                    if wasCanCollide then
+                        targetRootPart.CanCollide = true
+                    end
+                    originalCFrame = nil
+                end
+                targetPlayer = nil
+                clearESP()
+            end
+        end)
+    end
+end
+
+local function stopProAim()
+    if isActive then
+        isActive = false
+        -- Возвращаем модель на место
+        if targetPlayer and targetRootPart and originalCFrame then
+            targetRootPart.CFrame = originalCFrame
+            if wasAnchored then
+                targetRootPart.Anchored = true
+            end
+            if wasCanCollide then
+                targetRootPart.CanCollide = true
+            end
+            originalCFrame = nil
+        end
+        targetPlayer = nil
+        targetRootPart = nil
+        clearESP()
+        if connection then
+            connection:Disconnect()
+            connection = nil
+        end
+    end
+end
+
+-- Отдельный цикл для обновления позиции FOV
+if Drawing then
+    fovConnection = RunService.Heartbeat:Connect(function()
+        local mousePosition = UserInputService:GetMouseLocation()
+        fovCircle.Position = mousePosition
+    end)
+end
+
+-- Активация по клавише F
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.F then
+        if isActive then
+            stopProAim()
+        else
+            startProAim()
+        end
+    end
+end)
+
+-- Ожидаем, пока в игре появятся другие игроки
+local function waitForOtherPlayers()
+    while #Players:GetPlayers() <= 1 do
+        wait(1)
+    end
+end
+
+-- Запускаем ожидание игроков
+coroutine.wrap(waitForOtherPlayers)()
+
+-- Очистка при завершении скрипта
+LocalPlayer.AncestryChanged:Connect(function()
+    if fovConnection then
+        fovConnection:Disconnect()
+        fovConnection = nil
+    end
+    if Drawing and fovCircle then
+        fovCircle:Remove()
+        fovCircle = nil
+    end
+end)
