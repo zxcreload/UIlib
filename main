@@ -49,7 +49,8 @@ getgenv().TriggerbotSettings = {
     CircleType = "Outline",
     Mode = "Always",
     Keybind = "T",
-    ToggleState = false
+    ToggleState = false,
+    TargetMode = "Center of Screen"
 }
 
 -- Aimbot elements
@@ -232,6 +233,17 @@ local TriggerKeybind = TriggerToggle:AddKeyPicker("TriggerKeybind", {
     end
 })
 
+TriggerbotGroup:AddDropdown("TriggerTargetMode", {
+    Values = {"Center of Screen", "Mouse Position"},
+    Default = getgenv().TriggerbotSettings.TargetMode,
+    Multi = false,
+    Text = "Target Mode",
+    Tooltip = "Select where to aim for triggerbot",
+    Callback = function(Value)
+        getgenv().TriggerbotSettings.TargetMode = Value
+    end
+})
+
 TriggerbotGroup:AddSlider("TriggerDelay", {
     Text = "Trigger Delay",
     Default = getgenv().TriggerbotSettings.Delay * 1000,
@@ -276,7 +288,7 @@ TriggerbotGroup:AddDropdown("TriggerCircleType", {
 })
 
 -- Aimbot script logic
-local Players, UserInputService, RunService = game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
+local Players, UserInputService, RunService, GuiService = game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService"), game:GetService("GuiService")
 local LocalPlayer, Mouse, Camera, CFrameNew, Vector3New, Vector2New = Players.LocalPlayer, Players.LocalPlayer:GetMouse(), workspace.CurrentCamera, CFrame.new, Vector3.new, Vector2.new
 local DrawingEnabled, Aiming = true, false
 local TargetPlayer
@@ -421,29 +433,43 @@ local Mouse = LocalPlayer:GetMouse()
 local Camera = Workspace.CurrentCamera
 local LastActivationTime = tick()
 
+-- Получаем высоту верхней панели один раз (нужно для корректировки в режиме Center of Screen)
+local GuiInset = GuiService:GetGuiInset()
+local TopbarOffset = GuiInset.Y -- Обычно около 36 пикселей
+
 -- Безопасное создание GUI
-local function CreateSafeGui()
+local function CreateSafeGui(name, ignoreGuiInset)
     local success, gui = pcall(function()
         local screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "TriggerbotFOV"
+        screenGui.Name = name
         screenGui.Parent = game:GetService("CoreGui") or LocalPlayer:WaitForChild("PlayerGui")
+        screenGui.IgnoreGuiInset = ignoreGuiInset
         return screenGui
     end)
     return success and gui or nil
 end
 
-local TriggerbotFOV = CreateSafeGui()
-if not TriggerbotFOV then
-    warn("Failed to create Triggerbot GUI")
+-- GUI для режима "Center of Screen" (с IgnoreGuiInset = true)
+local CenterTriggerbotFOV = CreateSafeGui("CenterTriggerbotFOV", true)
+if not CenterTriggerbotFOV then
+    warn("Failed to create CenterTriggerbotFOV GUI")
+    return
+end
+
+-- GUI для режима "Mouse Position" (с IgnoreGuiInset = false, как в предыдущей версии)
+local MouseTriggerbotFOV = CreateSafeGui("MouseTriggerbotFOV", false)
+if not MouseTriggerbotFOV then
+    warn("Failed to create MouseTriggerbotFOV GUI")
     return
 end
 
 -- Создание элементов с защитой от ошибок
-local function CreateCircle(name, filled)
+local function CreateCircle(name, filled, parent)
     return pcall(function()
         local element = filled and Instance.new("Frame") or Instance.new("ImageLabel")
         element.Name = name
         element.Size = UDim2.new(0, getgenv().TriggerbotSettings.Radius * 2, 0, getgenv().TriggerbotSettings.Radius * 2)
+        element.AnchorPoint = Vector2.new(0.5, 0.5) -- Устанавливаем AnchorPoint в центр
         
         if filled then
             element.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
@@ -458,7 +484,7 @@ local function CreateCircle(name, filled)
         end
         
         element.BorderSizePixel = 0
-        element.Parent = TriggerbotFOV
+        element.Parent = parent
         
         local corner = Instance.new("UICorner")
         corner.CornerRadius = UDim.new(0.5, 0)
@@ -468,11 +494,21 @@ local function CreateCircle(name, filled)
     end)
 end
 
-local successFilled, TriggerFilled = CreateCircle("TriggerFilled", true)
-local successOutline, TriggerOutline = CreateCircle("TriggerOutline", false)
+-- Круги для режима "Center of Screen"
+local successCenterFilled, CenterFilled = CreateCircle("CenterFilled", true, CenterTriggerbotFOV)
+local successCenterOutline, CenterOutline = CreateCircle("CenterOutline", false, CenterTriggerbotFOV)
 
-if not successFilled or not successOutline then
-    warn("Failed to create trigger circles")
+if not successCenterFilled or not successCenterOutline then
+    warn("Failed to create Center trigger circles")
+    return
+end
+
+-- Круги для режима "Mouse Position"
+local successMouseFilled, MouseFilled = CreateCircle("MouseFilled", true, MouseTriggerbotFOV)
+local successMouseOutline, MouseOutline = CreateCircle("MouseOutline", false, MouseTriggerbotFOV)
+
+if not successMouseFilled or not successMouseOutline then
+    warn("Failed to create Mouse trigger circles")
     return
 end
 
@@ -509,30 +545,56 @@ local function UpdateTriggerbot()
         end
     end
 
+    -- Скрываем все круги, если триггербот неактивен
     if not isActive then
-        TriggerFilled.Visible = false
-        TriggerOutline.Visible = false
+        CenterFilled.Visible = false
+        CenterOutline.Visible = false
+        MouseFilled.Visible = false
+        MouseOutline.Visible = false
         return
     end
 
-    -- Обновление позиции
-    local mousePos = Vector2.new(Mouse.X, Mouse.Y)
-    local circlePos = UDim2.new(0, mousePos.X - getgenv().TriggerbotSettings.Radius, 
-                               0, mousePos.Y - getgenv().TriggerbotSettings.Radius)
-    
-    TriggerFilled.Position = circlePos
-    TriggerOutline.Position = circlePos
+    -- Определяем точку прицеливания в зависимости от TargetMode
+    local targetPos
+    local circlePos
+    local activeFilled, activeOutline
+
+    if getgenv().TriggerbotSettings.TargetMode == "Center of Screen" then
+        -- Используем круги для режима "Center of Screen"
+        activeFilled = CenterFilled
+        activeOutline = CenterOutline
+        -- Скрываем круги для "Mouse Position"
+        MouseFilled.Visible = false
+        MouseOutline.Visible = false
+        -- Центрируем круг относительно видимой области (IgnoreGuiInset = true)
+        targetPos = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        circlePos = UDim2.new(0.5, 0, 0.5, 0) -- 50% ширины и высоты видимой области
+    else -- "Mouse Position"
+        -- Используем круги для режима "Mouse Position"
+        activeFilled = MouseFilled
+        activeOutline = MouseOutline
+        -- Скрываем круги для "Center of Screen"
+        CenterFilled.Visible = false
+        CenterOutline.Visible = false
+        -- Используем логику из предыдущей версии (без корректировок на верхнюю панель)
+        targetPos = Vector2.new(Mouse.X, Mouse.Y)
+        circlePos = UDim2.new(0, Mouse.X, 0, Mouse.Y)
+    end
+
+    -- Устанавливаем позицию активных кругов
+    activeFilled.Position = circlePos
+    activeOutline.Position = circlePos
     
     -- Обновление размера
-    TriggerFilled.Size = UDim2.new(0, getgenv().TriggerbotSettings.Radius * 2, 0, getgenv().TriggerbotSettings.Radius * 2)
-    TriggerOutline.Size = UDim2.new(0, getgenv().TriggerbotSettings.Radius * 2, 0, getgenv().TriggerbotSettings.Radius * 2)
+    activeFilled.Size = UDim2.new(0, getgenv().TriggerbotSettings.Radius * 2, 0, getgenv().TriggerbotSettings.Radius * 2)
+    activeOutline.Size = UDim2.new(0, getgenv().TriggerbotSettings.Radius * 2, 0, getgenv().TriggerbotSettings.Radius * 2)
     
     -- Обновление видимости
     local showFilled = getgenv().TriggerbotSettings.CircleVisible and getgenv().TriggerbotSettings.CircleType == "Filled"
     local showOutline = getgenv().TriggerbotSettings.CircleVisible and getgenv().TriggerbotSettings.CircleType == "Outline"
     
-    TriggerFilled.Visible = showFilled
-    TriggerOutline.Visible = showOutline
+    activeFilled.Visible = showFilled
+    activeOutline.Visible = showOutline
     
     -- Поиск цели
     local targetFound = false
@@ -542,7 +604,7 @@ local function UpdateTriggerbot()
             if humanoidRootPart then
                 local screenPos, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
                 if onScreen then
-                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - targetPos).Magnitude
                     if distance <= getgenv().TriggerbotSettings.Radius and not WallCheck(humanoidRootPart) then
                         targetFound = true
                         break
@@ -558,7 +620,6 @@ local function UpdateTriggerbot()
             local character = LocalPlayer.Character
             if character then
                 local tool = character:FindFirstChildOfClass("Tool")
-                -- Проверяем, что инструмент существует, имеет Handle и экипирован
                 if tool and tool:FindFirstChild("Handle") and tool.Parent == character then
                     tool:Activate()
                     task.wait(0.1)
@@ -567,14 +628,14 @@ local function UpdateTriggerbot()
                 end
             end
         end
-        TriggerFilled.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-        if TriggerOutline:FindFirstChild("UIStroke") then
-            TriggerOutline.UIStroke.Color = Color3.fromRGB(0, 255, 0)
+        activeFilled.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        if activeOutline:FindFirstChild("UIStroke") then
+            activeOutline.UIStroke.Color = Color3.fromRGB(0, 255, 0)
         end
     else
-        TriggerFilled.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        if TriggerOutline:FindFirstChild("UIStroke") then
-            TriggerOutline.UIStroke.Color = Color3.fromRGB(255, 0, 0)
+        activeFilled.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        if activeOutline:FindFirstChild("UIStroke") then
+            activeOutline.UIStroke.Color = Color3.fromRGB(255, 0, 0)
         end
     end
 end
