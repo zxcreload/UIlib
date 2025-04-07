@@ -21,7 +21,7 @@ local Tabs = {
     HUD = Window:AddTab("HUD", "monitor"),
 }
 
--- Aimbot configuration (оставляем как есть)
+-- Aimbot configuration
 getgenv().AimSettings = {
     AimPart = "Head",
     FOV = 300,
@@ -46,10 +46,13 @@ getgenv().TriggerbotSettings = {
     Delay = 0.1,
     Radius = 100,
     CircleVisible = false,
-    CircleType = "Outline" -- Новый параметр для типа круга
+    CircleType = "Outline",
+    Mode = "Always",
+    Keybind = "T",
+    ToggleState = false
 }
 
--- Aimbot elements (оставляем как есть)
+-- Aimbot elements
 local AimbotGroup = Tabs["Combat"]:AddLeftGroupbox("Aimbot Settings")
 local AimToggle = AimbotGroup:AddToggle("AimEnabled", {
     Text = "Enable Aimbot",
@@ -180,6 +183,52 @@ local TriggerToggle = TriggerbotGroup:AddToggle("TriggerEnabled", {
     Tooltip = "Enable/Disable the triggerbot",
     Callback = function(Value)
         getgenv().TriggerbotSettings.Enabled = Value
+        if Value and getgenv().TriggerbotSettings.Mode == "Toggle" then
+            getgenv().TriggerbotSettings.ToggleState = true
+            Library:Notify({
+                Title = "Triggerbot",
+                Description = "Triggerbot Enabled",
+                Time = 3
+            })
+        elseif not Value then
+            getgenv().TriggerbotSettings.ToggleState = false
+        end
+    end
+})
+
+TriggerbotGroup:AddDropdown("TriggerMode", {
+    Values = {"Always", "Toggle"},
+    Default = getgenv().TriggerbotSettings.Mode,
+    Multi = false,
+    Text = "Trigger Mode",
+    Tooltip = "Select triggerbot activation mode",
+    Callback = function(Value)
+        getgenv().TriggerbotSettings.Mode = Value
+        if Value ~= "Toggle" then
+            getgenv().TriggerbotSettings.ToggleState = false
+        end
+    end
+})
+
+local TriggerKeybind = TriggerToggle:AddKeyPicker("TriggerKeybind", {
+    Default = getgenv().TriggerbotSettings.Keybind,
+    Mode = "Toggle",
+    Text = "Trigger Key",
+    NoUI = false,
+    Callback = function(Value)
+        if getgenv().TriggerbotSettings.Mode == "Toggle" and getgenv().TriggerbotSettings.Enabled then
+            getgenv().TriggerbotSettings.ToggleState = not getgenv().TriggerbotSettings.ToggleState
+            if getgenv().TriggerbotSettings.ToggleState then
+                Library:Notify({
+                    Title = "Triggerbot",
+                    Description = "Triggerbot Enabled",
+                    Time = 3
+                })
+            end
+        end
+    end,
+    ChangedCallback = function(NewKey)
+        getgenv().TriggerbotSettings.Keybind = NewKey.Name
     end
 })
 
@@ -226,7 +275,7 @@ TriggerbotGroup:AddDropdown("TriggerCircleType", {
     end
 })
 
--- Aimbot script logic (оставляем как есть)
+-- Aimbot script logic
 local Players, UserInputService, RunService = game:GetService("Players"), game:GetService("UserInputService"), game:GetService("RunService")
 local LocalPlayer, Mouse, Camera, CFrameNew, Vector3New, Vector2New = Players.LocalPlayer, Players.LocalPlayer:GetMouse(), workspace.CurrentCamera, CFrame.new, Vector3.new, Vector2.new
 local DrawingEnabled, Aiming = true, false
@@ -364,23 +413,6 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
-local function ToggleResolver()
-    if getgenv().AimSettings.ResolverMode == "Velocity" then
-        getgenv().AimSettings.ResolverMode = "Move direction"
-    elseif getgenv().AimSettings.ResolverMode == "Move direction" then
-        getgenv().AimSettings.ResolverMode = "Calculate CFrame"
-    elseif getgenv().AimSettings.ResolverMode == "Calculate CFrame" then
-        getgenv().AimSettings.ResolverMode = "Velocity"
-    end
-    print("Resolver mode changed to:", getgenv().AimSettings.ResolverMode)
-end
-
-UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.R then
-        ToggleResolver()
-    end
-end)
-
 -- Triggerbot Logic
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
@@ -465,9 +497,19 @@ local function WallCheck(part)
     return true
 end
 
--- Основной цикл
+-- Основной цикл Triggerbot
 local function UpdateTriggerbot()
-    if not getgenv().TriggerbotSettings.Enabled then
+    -- Проверка активности триггербота в зависимости от режима
+    local isActive = false
+    if getgenv().TriggerbotSettings.Enabled then
+        if getgenv().TriggerbotSettings.Mode == "Always" then
+            isActive = true
+        elseif getgenv().TriggerbotSettings.Mode == "Toggle" then
+            isActive = getgenv().TriggerbotSettings.ToggleState
+        end
+    end
+
+    if not isActive then
         TriggerFilled.Visible = false
         TriggerOutline.Visible = false
         return
@@ -480,6 +522,10 @@ local function UpdateTriggerbot()
     
     TriggerFilled.Position = circlePos
     TriggerOutline.Position = circlePos
+    
+    -- Обновление размера
+    TriggerFilled.Size = UDim2.new(0, getgenv().TriggerbotSettings.Radius * 2, 0, getgenv().TriggerbotSettings.Radius * 2)
+    TriggerOutline.Size = UDim2.new(0, getgenv().TriggerbotSettings.Radius * 2, 0, getgenv().TriggerbotSettings.Radius * 2)
     
     -- Обновление видимости
     local showFilled = getgenv().TriggerbotSettings.CircleVisible and getgenv().TriggerbotSettings.CircleType == "Filled"
@@ -512,13 +558,14 @@ local function UpdateTriggerbot()
             local character = LocalPlayer.Character
             if character then
                 local tool = character:FindFirstChildOfClass("Tool")
-                if tool and tool:FindFirstChild("Handle") then
+                -- Проверяем, что инструмент существует, имеет Handle и экипирован
+                if tool and tool:FindFirstChild("Handle") and tool.Parent == character then
                     tool:Activate()
                     task.wait(0.1)
                     tool:Deactivate()
+                    LastActivationTime = tick()
                 end
             end
-            LastActivationTime = tick()
         end
         TriggerFilled.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
         if TriggerOutline:FindFirstChild("UIStroke") then
