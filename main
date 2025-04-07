@@ -828,6 +828,359 @@ do
     end)
 end
 
+-- Pro Aim Settings
+local ProAimGroup = Tabs["Combat"]:AddLeftGroupbox("Pro Aim Settings")
+
+-- Глобальные переменные для Pro Aim
+getgenv().ProAimSettings = {
+    Enabled = false,
+    Keybind = "F",
+    ShowFOV = false,
+    FOVSize = 300,
+    Mode = "InFov", -- "InFov" или "Target"
+    TargetPlayer = nil, -- Ник выбранного игрока для режима Target
+    Distance = 10 -- Дальность закрепления
+}
+
+local isActive = false
+local connection
+local fovConnection
+local targetPlayer = nil
+local targetRootPart = nil
+local targetESP = nil
+local originalCFrame = nil
+local wasAnchored = false
+local wasCanCollide = false
+
+-- Создание FOV круга
+local fovCircle = Drawing and Drawing.new("Circle")
+if fovCircle then
+    fovCircle.Radius = getgenv().ProAimSettings.FOVSize
+    fovCircle.Thickness = 2
+    fovCircle.Color = Color3.fromRGB(255, 255, 255)
+    fovCircle.Filled = false
+    fovCircle.Visible = getgenv().ProAimSettings.ShowFOV
+end
+
+-- Функция создания ESP
+local function createESP(part, color, name)
+    if not part or not part.Parent then return nil end
+    local esp = Instance.new("BoxHandleAdornment")
+    esp.Name = name
+    esp.Adornee = part
+    esp.AlwaysOnTop = true
+    esp.ZIndex = 10
+    esp.Size = part.Size + Vector3.new(0.1, 0.1, 0.1)
+    esp.Transparency = 0.5
+    esp.Color3 = color
+    esp.Parent = part
+    return esp
+end
+
+-- Функция удаления ESP
+local function clearESP()
+    if targetESP then
+        targetESP:Destroy()
+        targetESP = nil
+    end
+end
+
+-- Поиск корневой части
+local function findRootPart(character)
+    local rootPart = character:FindFirstChild("HumanoidRootPart") or
+                     character:FindFirstChild("Torso") or
+                     character:FindFirstChild("UpperTorso") or
+                     character:FindFirstChild("LowerTorso")
+    if not rootPart then
+        for _, part in pairs(character:GetChildren()) do
+            if part:IsA("BasePart") and string.find(part.Name:lower(), "torso") then
+                rootPart = part
+                break
+            end
+        end
+    end
+    return rootPart
+end
+
+-- Поиск ближайшего игрока к курсору
+local function findClosestPlayerToCursor()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    local mousePosition = UserInputService:GetMouseLocation()
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local rootPart = findRootPart(player.Character)
+            if rootPart then
+                local screenPoint = Camera:WorldToViewportPoint(rootPart.Position)
+                local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - mousePosition).Magnitude
+                if getgenv().ProAimSettings.Mode == "InFov" and distance <= getgenv().ProAimSettings.FOVSize or
+                   getgenv().ProAimSettings.Mode == "Target" and player.Name == getgenv().ProAimSettings.TargetPlayer then
+                    if distance < shortestDistance then
+                        shortestDistance = distance
+                        closestPlayer = player
+                    end
+                end
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+-- Обновление позиции цели
+local function updateTargetPosition()
+    if not targetPlayer or not targetPlayer.Parent or not targetPlayer.Character or not targetPlayer.Character.Parent then
+        targetPlayer = nil
+        clearESP()
+        return
+    end
+    
+    if not LocalPlayer.Character or not findRootPart(LocalPlayer.Character) then return end
+    
+    targetRootPart = findRootPart(targetPlayer.Character)
+    if not targetRootPart then
+        targetPlayer = nil
+        clearESP()
+        return
+    end
+    
+    if not originalCFrame then
+        originalCFrame = targetRootPart.CFrame
+    end
+    
+    if targetRootPart.Anchored then
+        wasAnchored = true
+        targetRootPart.Anchored = false
+    else
+        wasAnchored = false
+    end
+    
+    if targetRootPart.CanCollide then
+        wasCanCollide = true
+        targetRootPart.CanCollide = false
+    else
+        wasCanCollide = false
+    end
+    
+    local localPlayerRootPart = findRootPart(LocalPlayer.Character)
+    local offsetPosition = localPlayerRootPart.Position + (localPlayerRootPart.CFrame.LookVector * getgenv().ProAimSettings.Distance)
+    targetRootPart.CFrame = CFrame.new(offsetPosition)
+    
+    clearESP()
+    targetESP = createESP(targetRootPart, Color3.new(1, 0, 0), "TargetESP")
+end
+
+-- Запуск Pro Aim
+local function startProAim()
+    if not isActive then
+        isActive = true
+        connection = RunService.Heartbeat:Connect(function()
+            local closestPlayer = findClosestPlayerToCursor()
+            
+            if closestPlayer ~= targetPlayer then
+                if targetPlayer and targetRootPart and originalCFrame then
+                    targetRootPart.CFrame = originalCFrame
+                    if wasAnchored then targetRootPart.Anchored = true end
+                    if wasCanCollide then targetRootPart.CanCollide = true end
+                    originalCFrame = nil
+                end
+                targetPlayer = closestPlayer
+                clearESP()
+            end
+            
+            if targetPlayer and targetPlayer.Character and targetPlayer.Character.Parent then
+                updateTargetPosition()
+            else
+                if targetPlayer and targetRootPart and originalCFrame then
+                    targetRootPart.CFrame = originalCFrame
+                    if wasAnchored then targetRootPart.Anchored = true end
+                    if wasCanCollide then targetRootPart.CanCollide = true end
+                    originalCFrame = nil
+                end
+                targetPlayer = nil
+                clearESP()
+            end
+        end)
+    end
+end
+
+-- Остановка Pro Aim
+local function stopProAim()
+    if isActive then
+        isActive = false
+        if targetPlayer and targetRootPart and originalCFrame then
+            targetRootPart.CFrame = originalCFrame
+            if wasAnchored then targetRootPart.Anchored = true end
+            if wasCanCollide then targetRootPart.CanCollide = true end
+            originalCFrame = nil
+        end
+        targetPlayer = nil
+        targetRootPart = nil
+        clearESP()
+        if connection then
+            connection:Disconnect()
+            connection = nil
+        end
+    end
+end
+
+-- Обновление FOV
+if Drawing then
+    fovConnection = RunService.Heartbeat:Connect(function()
+        local mousePosition = UserInputService:GetMouseLocation()
+        fovCircle.Position = mousePosition
+        fovCircle.Radius = getgenv().ProAimSettings.FOVSize
+        fovCircle.Visible = getgenv().ProAimSettings.ShowFOV and getgenv().ProAimSettings.Enabled
+    end)
+end
+
+-- UI элементы для Pro Aim
+local ProAimToggle = ProAimGroup:AddToggle("ProAimEnabled", {
+    Text = "Enable Pro Aim",
+    Default = getgenv().ProAimSettings.Enabled,
+    Tooltip = "Enable/Disable Pro Aim",
+    Callback = function(Value)
+        getgenv().ProAimSettings.Enabled = Value
+        if Value then
+            startProAim()
+        else
+            stopProAim()
+        end
+    end
+})
+
+local ProAimKeybind = ProAimToggle:AddKeyPicker("ProAimKeybind", {
+    Default = getgenv().ProAimSettings.Keybind,
+    Mode = "Toggle",
+    Text = "Pro Aim Key",
+    NoUI = false,
+    Callback = function(Value)
+        if getgenv().ProAimSettings.Enabled then
+            if isActive then
+                stopProAim()
+            else
+                startProAim()
+            end
+        end
+    end,
+    ChangedCallback = function(NewKey)
+        getgenv().ProAimSettings.Keybind = tostring(NewKey):lower()
+    end
+})
+
+ProAimGroup:AddToggle("ProAimShowFOV", {
+    Text = "Show FOV",
+    Default = getgenv().ProAimSettings.ShowFOV,
+    Tooltip = "Show/Hide the FOV circle",
+    Callback = function(Value)
+        getgenv().ProAimSettings.ShowFOV = Value
+        if fovCircle then fovCircle.Visible = Value and getgenv().ProAimSettings.Enabled end
+    end
+})
+
+ProAimGroup:AddSlider("ProAimFOVSize", {
+    Text = "FOV Size",
+    Default = getgenv().ProAimSettings.FOVSize,
+    Min = 10,
+    Max = 1000,
+    Rounding = 0,
+    Compact = false,
+    Callback = function(Value)
+        getgenv().ProAimSettings.FOVSize = Value
+        if fovCircle then fovCircle.Radius = Value end
+    end
+})
+
+ProAimGroup:AddSlider("ProAimDistance", {
+    Text = "Target Distance",
+    Default = getgenv().ProAimSettings.Distance,
+    Min = 5,
+    Max = 50,
+    Rounding = 1,
+    Compact = false,
+    Suffix = " studs",
+    Callback = function(Value)
+        getgenv().ProAimSettings.Distance = Value
+    end
+})
+
+local ProAimModeDropdown = ProAimGroup:AddDropdown("ProAimMode", {
+    Values = {"InFov", "Target"},
+    Default = getgenv().ProAimSettings.Mode,
+    Multi = false,
+    Text = "Pro Aim Mode",
+    Tooltip = "Select Pro Aim mode",
+    Callback = function(Value)
+        getgenv().ProAimSettings.Mode = Value
+    end
+})
+
+-- Динамическое обновление списка игроков
+local function updatePlayerList()
+    local playerNames = {}
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            table.insert(playerNames, player.Name)
+        end
+    end
+    return playerNames
+end
+
+local TargetPlayerDropdown = ProAimGroup:AddDropdown("ProAimTargetPlayer", {
+    Values = updatePlayerList(),
+    Default = getgenv().ProAimSettings.TargetPlayer,
+    Multi = false,
+    Text = "Target Player",
+    Tooltip = "Select target player for Target mode",
+    Callback = function(Value)
+        getgenv().ProAimSettings.TargetPlayer = Value
+    end
+})
+
+-- Обновление списка игроков при изменении состава
+Players.PlayerAdded:Connect(function()
+    TargetPlayerDropdown:SetValues(updatePlayerList())
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    TargetPlayerDropdown:SetValues(updatePlayerList())
+    if getgenv().ProAimSettings.TargetPlayer == player.Name then
+        getgenv().ProAimSettings.TargetPlayer = nil
+        TargetPlayerDropdown:SetValue(nil)
+        stopProAim()
+    end
+end)
+
+-- Проверка смерти цели
+RunService.Heartbeat:Connect(function()
+    if getgenv().ProAimSettings.Mode == "Target" and getgenv().ProAimSettings.TargetPlayer then
+        local target = Players:FindFirstChild(getgenv().ProAimSettings.TargetPlayer)
+        if target and target.Character then
+            local humanoid = target.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health <= 0 then
+                stopProAim()
+            end
+        else
+            stopProAim()
+        end
+    end
+end)
+
+-- Очистка при выходе игрока
+LocalPlayer.AncestryChanged:Connect(function()
+    if fovConnection then
+        fovConnection:Disconnect()
+        fovConnection = nil
+    end
+    if fovCircle then
+        fovCircle:Remove()
+        fovCircle = nil
+    end
+    stopProAim()
+end)
+
+
 -- Setup ThemeManager and SaveManager
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
