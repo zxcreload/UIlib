@@ -6,7 +6,7 @@ local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
 
 -- Create the main window
 local Window = Library:CreateWindow({
-    Title = "ClickGUI",
+    Title = "T̸̞̱̾iịa̵̅n̷͠C̵X̸͒",
     Footer = "Cursed by 32vision",
     ShowCustomCursor = false,
 })
