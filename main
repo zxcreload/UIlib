@@ -1620,23 +1620,255 @@ LocalPlayer.AncestryChanged:Connect(function()
     end
 end)
 
--- [Ваш оставшийся код после Movement, включая ThemeManager и SaveManager] --
+-- Fly Hack Settings
+local FlyHackGroup = Tabs["Movement"]:AddRightGroupbox("Fly Hack Settings")
 
--- Setup ThemeManager and SaveManager
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+-- Configuration for Fly Hack
+getgenv().FlyHackSettings = {
+    Enabled = false,           -- Global enable/disable (default: off)
+    ToggleKey = "None",        -- Default toggle key (none)
+    NormalSpeed = 25,          -- Regular flight speed
+    Noclip = true,             -- Pass through objects (default: on)
+    AntiRagdoll = true,        -- Prevent ragdoll effects
+    Smoothness = 0.15          -- Movement smoothing (0-1)
+}
 
-ThemeManager:SetFolder("ClickGUI")
-SaveManager:SetFolder("ClickGUI/settings")
+-- State variables
+local flying = false
+local localPlayer = Players.LocalPlayer
+local character, humanoid, rootPart
+local bodyGyro, bodyVelocity, noclipConnection
+local lastVelocity = Vector3.new()
 
-SaveManager:BuildConfigSection(Tabs["HUD"])
-ThemeManager:ApplyToTab(Tabs["HUD"])
+-- Initialize character connection
+local function initCharacter()
+    character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    
+    repeat task.wait() until character:FindFirstChild("Humanoid") and character:FindFirstChild("HumanoidRootPart")
+    humanoid = character:FindFirstChild("Humanoid")
+    rootPart = character:FindFirstChild("HumanoidRootPart")
+    
+    if getgenv().FlyHackSettings.AntiRagdoll then
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+    end
+    
+    if flying then
+        humanoid.PlatformStand = true
+    end
+end
 
--- Show the UI
-Library:Toggle(true)
+-- Cleanup function
+local function cleanup()
+    if bodyGyro then 
+        bodyGyro:Destroy() 
+        bodyGyro = nil
+    end
+    if bodyVelocity then 
+        bodyVelocity.Velocity = Vector3.new()
+        bodyVelocity:Destroy() 
+        bodyVelocity = nil
+    end
+    
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+    
+    if humanoid then
+        humanoid.PlatformStand = false
+        if getgenv().FlyHackSettings.AntiRagdoll then
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+            humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+        end
+        task.spawn(function()
+            task.wait(0.1)
+            if rootPart then
+                rootPart.Velocity = Vector3.new()
+                rootPart.RotVelocity = Vector3.new()
+            end
+        end)
+    end
+    
+    flying = false
+    lastVelocity = Vector3.new()
+end
 
+-- Noclip implementation
+local function enableNoclip()
+    if not getgenv().FlyHackSettings.Noclip or noclipConnection then return end
+    
+    noclipConnection = RunService.Stepped:Connect(function()
+        if character and flying then
+            for _, part in pairs(character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+-- Disable Noclip
+local function disableNoclip()
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+        if character then
+            for _, part in pairs(character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = true
+                end
+            end
+        end
+    end
+end
+
+-- Movement controller
+local function flyController()
+    if not getgenv().FlyHackSettings.Enabled or not rootPart then return end
+    
+    bodyGyro = Instance.new("BodyGyro")
+    bodyVelocity = Instance.new("BodyVelocity")
+    
+    bodyGyro.P = 15000
+    bodyGyro.D = 1000
+    bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    bodyGyro.CFrame = rootPart.CFrame
+    
+    bodyVelocity.Velocity = Vector3.new()
+    bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    
+    bodyGyro.Parent = rootPart
+    bodyVelocity.Parent = rootPart
+    humanoid.PlatformStand = true
+    
+    if getgenv().FlyHackSettings.Noclip then
+        enableNoclip()
+    end
+    
+    local flyConnection
+    flyConnection = RunService.Heartbeat:Connect(function(delta)
+        if not flying or not rootPart or not humanoid then
+            flyConnection:Disconnect()
+            cleanup()
+            return
+        end
+        
+        local camera = Workspace.CurrentCamera
+        if not camera then return end
+        
+        local speed = getgenv().FlyHackSettings.NormalSpeed
+        local moveDirection = Vector3.new()
+        
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+            moveDirection = moveDirection + camera.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+            moveDirection = moveDirection - camera.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+            moveDirection = moveDirection - camera.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+            moveDirection = moveDirection + camera.CFrame.RightVector
+        end
+        
+        if moveDirection.Magnitude > 0 then
+            moveDirection = moveDirection.Unit * speed
+        end
+        
+        lastVelocity = lastVelocity:Lerp(moveDirection, getgenv().FlyHackSettings.Smoothness)
+        bodyVelocity.Velocity = lastVelocity
+        bodyGyro.CFrame = camera.CFrame
+    end)
+end
+
+-- Toggle flight
+local function toggleFlight()
+    if not getgenv().FlyHackSettings.Enabled then return end
+    
+    flying = not flying
+    
+    if flying then
+        flyController()
+    else
+        cleanup()
+    end
+end
+
+-- UI Elements for Fly Hack
+local FlyHackToggle = FlyHackGroup:AddToggle("FlyHackEnabled", {
+    Text = "Enable Fly Hack",
+    Default = getgenv().FlyHackSettings.Enabled,
+    Tooltip = "Enable/Disable Fly Hack",
+    Callback = function(Value)
+        getgenv().FlyHackSettings.Enabled = Value
+        if not Value and flying then
+            toggleFlight() -- Выключаем полет, если был активен
+        end
+    end
+})
+
+local FlyHackKeybind = FlyHackToggle:AddKeyPicker("FlyHackKeybind", {
+    Default = getgenv().FlyHackSettings.ToggleKey,
+    Mode = "Toggle",
+    Text = "Toggle Fly",
+    NoUI = false,
+    Callback = function(Value)
+        toggleFlight()
+    end,
+    ChangedCallback = function(NewKey)
+        getgenv().FlyHackSettings.ToggleKey = tostring(NewKey)
+    end
+})
+
+FlyHackGroup:AddInput("FlyHackSpeed", {
+    Default = tostring(getgenv().FlyHackSettings.NormalSpeed),
+    Numeric = true,
+    Finished = true,
+    Text = "Fly Speed",
+    Tooltip = "Set flight speed",
+    Placeholder = "Enter speed...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 0 then
+            getgenv().FlyHackSettings.NormalSpeed = numValue
+        end
+    end
+})
+
+FlyHackGroup:AddToggle("FlyHackNoclip", {
+    Text = "Enable Noclip",
+    Default = getgenv().FlyHackSettings.Noclip,
+    Tooltip = "Toggle noclip during flight",
+    Callback = function(Value)
+        getgenv().FlyHackSettings.Noclip = Value
+        if not Value and flying then
+            disableNoclip()
+        elseif Value and flying then
+            enableNoclip()
+        end
+    end
+})
+
+-- Initialize
+initCharacter()
+
+-- Character respawn handler
+localPlayer.CharacterAdded:Connect(function(newChar)
+    cleanup()
+    initCharacter()
+    if flying then
+        task.wait(0.5)
+        flyController()
+    end
+end)
+
+-- Cleanup on player exit
+localPlayer.AncestryChanged:Connect(function()
+    cleanup()
+end)
 
 -- Setup ThemeManager and SaveManager
 ThemeManager:SetLibrary(Library)
