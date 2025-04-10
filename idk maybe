@@ -1,0 +1,306 @@
+--[[
+
+░█─── █▀▀ █▀▀█ █─█ █▀▀ █▀▀▄ 　 █▀▀▄ █──█ 
+░█─── █▀▀ █▄▄█ █▀▄ █▀▀ █──█ 　 █▀▀▄ █▄▄█ 
+░█▄▄█ ▀▀▀ ▀──▀ ▀─▀ ▀▀▀ ▀▀▀─ 　 ▀▀▀─ ▄▄▄█ 
+──▀ █▀▀█ █▀▄▀█ █─█ █── █▀▀ █▀▀ 
+──█ █▄▄█ █─▀─█ █▀▄ █── █▀▀ ▀▀█ 
+█▄█ ▀──▀ ▀───▀ ▀─▀ ▀▀▀ ▀▀▀ ▀▀▀
+
+]]
+
+--> Services <--
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Camera = workspace.CurrentCamera
+
+--> LocalPlayer Variables <--
+local player = Players.LocalPlayer
+local playerCharacter = player.Character or player:WaitForChild("Character")
+local playerHumanoidRootPart = playerCharacter:FindFirstChild("HumanoidRootPart") or playerCharacter:WaitForChild("HumanoidRootPart")
+local playerHumanoid = playerCharacter:FindFirstChild("Humanoid") or playerCharacter:WaitForChild("Humanoid")
+
+--> Create Camera Anchor Part <--
+local cameraAnchor = Instance.new("Part")
+cameraAnchor.Name = "CameraAnchor"
+cameraAnchor.Anchored = true
+cameraAnchor.CanCollide = false
+cameraAnchor.Transparency = 1
+cameraAnchor.Size = Vector3.new(1, 1, 1)
+cameraAnchor.Parent = game.Workspace
+cameraAnchor.CFrame = playerHumanoidRootPart.CFrame
+
+--> Targetstrafe Config <--
+getgenv().TargetstrafeConfig = {
+    Toggled = false,           -- Включён ли targetstrafe
+    Speed = 2,                -- Скорость вращения вокруг цели (радианы в секунду)
+    Radius = 10,              -- Радиус вращения вокруг цели
+    HeightOffset = 3,         -- Смещение по высоте относительно цели
+    AfterimageCount = 8,      -- Количество копий в "хвосте"
+    AfterimageInterval = 0.05,-- Интервал создания послеобраза (в секундах)
+    AfterimageLifetime = 0.8, -- Время жизни послеобраза (в секундах)
+    BoxColor = Color3.fromRGB(0, 255, 255), -- Цвет боксов
+    BoxThickness = 2,         -- Толщина линий
+    BoxTransparency = 0.5,    -- Прозрачность боксов
+    UseFading = true,         -- Плавное исчезновение
+    UseDynamicBoxes = true    -- Динамические размеры боксов
+}
+
+--> Variables for Targetstrafe <--
+local target = nil            -- Цель (другой игрок)
+local angle = 0               -- Текущий угол вращения
+local lastAfterimageTime = 0  -- Время последнего создания послеобраза
+local afterimageQueue = {}    -- Очередь для хранения эффектов "хвоста"
+local boxCache = {}           -- Кэш для хранения Drawing объектов
+
+--> Drawing Library Functions <--
+local function create3DBox(position, size)
+    local box = {
+        Lines = {},
+        Created = tick(),
+        Position = position,
+        Size = size
+    }
+    
+    -- Создаем 12 линий для 3D бокса (4 вертикальные + 8 горизонтальных)
+    for i = 1, 12 do
+        local line = Drawing.new("Line")
+        line.Thickness = TargetstrafeConfig.BoxThickness
+        line.Color = TargetstrafeConfig.BoxColor
+        line.Transparency = 1 - TargetstrafeConfig.BoxTransparency
+        line.Visible = true
+        table.insert(box.Lines, line)
+    end
+    
+    table.insert(boxCache, box)
+    return box
+end
+
+local function update3DBox(box)
+    local corners = {}
+    local position = box.Position
+    local size = box.Size
+    
+    -- Вычисляем 8 углов бокса
+    local halfSize = size / 2
+    corners[1] = position + Vector3.new(-halfSize.X, -halfSize.Y, -halfSize.Z)
+    corners[2] = position + Vector3.new(halfSize.X, -halfSize.Y, -halfSize.Z)
+    corners[3] = position + Vector3.new(halfSize.X, -halfSize.Y, halfSize.Z)
+    corners[4] = position + Vector3.new(-halfSize.X, -halfSize.Y, halfSize.Z)
+    
+    corners[5] = position + Vector3.new(-halfSize.X, halfSize.Y, -halfSize.Z)
+    corners[6] = position + Vector3.new(halfSize.X, halfSize.Y, -halfSize.Z)
+    corners[7] = position + Vector3.new(halfSize.X, halfSize.Y, halfSize.Z)
+    corners[8] = position + Vector3.new(-halfSize.X, halfSize.Y, halfSize.Z)
+    
+    -- Проецируем 3D точки в 2D пространство экрана
+    local screenPoints = {}
+    for i, corner in ipairs(corners) do
+        local screenPos, visible = Camera:WorldToViewportPoint(corner)
+        screenPoints[i] = {Position = Vector2.new(screenPos.X, screenPos.Y), Visible = visible}
+    end
+    
+    -- Обновляем линии бокса
+    local lines = box.Lines
+    
+    -- Нижняя грань
+    lines[1].From = screenPoints[1].Position
+    lines[1].To = screenPoints[2].Position
+    lines[2].From = screenPoints[2].Position
+    lines[2].To = screenPoints[3].Position
+    lines[3].From = screenPoints[3].Position
+    lines[3].To = screenPoints[4].Position
+    lines[4].From = screenPoints[4].Position
+    lines[4].To = screenPoints[1].Position
+    
+    -- Верхняя грань
+    lines[5].From = screenPoints[5].Position
+    lines[5].To = screenPoints[6].Position
+    lines[6].From = screenPoints[6].Position
+    lines[6].To = screenPoints[7].Position
+    lines[7].From = screenPoints[7].Position
+    lines[7].To = screenPoints[8].Position
+    lines[8].From = screenPoints[8].Position
+    lines[8].To = screenPoints[5].Position
+    
+    -- Вертикальные линии
+    lines[9].From = screenPoints[1].Position
+    lines[9].To = screenPoints[5].Position
+    lines[10].From = screenPoints[2].Position
+    lines[10].To = screenPoints[6].Position
+    lines[11].From = screenPoints[3].Position
+    lines[11].To = screenPoints[7].Position
+    lines[12].From = screenPoints[4].Position
+    lines[12].To = screenPoints[8].Position
+    
+    -- Обновляем видимость линий
+    for i, line in ipairs(lines) do
+        local fromIndex = math.ceil(i / 2)
+        local toIndex = fromIndex + (i % 2 == 0 and 1 or 0)
+        toIndex = toIndex > 8 and toIndex - 8 or toIndex
+        
+        line.Visible = screenPoints[fromIndex].Visible and screenPoints[toIndex].Visible
+    end
+    
+    -- Плавное исчезновение
+    if TargetstrafeConfig.UseFading then
+        local lifePercent = 1 - (tick() - box.Created) / TargetstrafeConfig.AfterimageLifetime
+        if lifePercent < 0 then lifePercent = 0 end
+        
+        local alpha = TargetstrafeConfig.BoxTransparency + (1 - TargetstrafeConfig.BoxTransparency) * lifePercent
+        for _, line in ipairs(lines) do
+            line.Transparency = 1 - alpha
+        end
+    end
+end
+
+local function cleanUpBoxes()
+    local currentTime = tick()
+    for i = #boxCache, 1, -1 do
+        local box = boxCache[i]
+        if currentTime - box.Created > TargetstrafeConfig.AfterimageLifetime then
+            for _, line in ipairs(box.Lines) do
+                line:Remove()
+            end
+            table.remove(boxCache, i)
+        end
+    end
+end
+
+--> Function to Update Afterimage Tail <--
+local function updateAfterimageTail(position)
+    -- Определяем размер бокса
+    local boxSize = Vector3.new(2, 4, 1)
+    if TargetstrafeConfig.UseDynamicBoxes then
+        -- Динамический размер на основе расстояния до камеры
+        local distance = (position - Camera.CFrame.Position).Magnitude
+        boxSize = Vector3.new(2, 4, 1) * (distance / 50)
+    end
+    
+    -- Создаем новый 3D бокс
+    create3DBox(position, boxSize)
+    
+    -- Ограничиваем количество боксов
+    while #boxCache > TargetstrafeConfig.AfterimageCount do
+        local oldBox = table.remove(boxCache, 1)
+        for _, line in ipairs(oldBox.Lines) do
+            line:Remove()
+        end
+    end
+end
+
+--> Function to Clear Afterimage Tail <--
+local function clearAfterimageTail()
+    for _, box in ipairs(boxCache) do
+        for _, line in ipairs(box.Lines) do
+            line:Remove()
+        end
+    end
+    boxCache = {}
+end
+
+--> Function to Find Nearest Player <--
+local function getNearestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    
+    for _, otherPlayer in pairs(Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (playerHumanoidRootPart.Position - otherPlayer.Character.HumanoidRootPart.Position).Magnitude
+            if distance < shortestDistance then
+                shortestDistance = distance
+                closestPlayer = otherPlayer
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+--> Handle Key Press to Select Target <--
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.E then
+        if not TargetstrafeConfig.Toggled then
+            target = getNearestPlayer()
+            if target then
+                TargetstrafeConfig.Toggled = true
+                Camera.CameraSubject = cameraAnchor
+                print("Targetstrafe enabled on: " .. target.Name)
+            else
+                print("No target found!")
+            end
+        else
+            TargetstrafeConfig.Toggled = false
+            target = nil
+            Camera.CameraSubject = playerHumanoid
+            clearAfterimageTail()
+            print("Targetstrafe disabled")
+        end
+    end
+end)
+
+--> Handle Character Respawn <--
+player.CharacterAdded:Connect(function(NewCharacter)
+    playerCharacter = NewCharacter
+    playerHumanoidRootPart = NewCharacter:FindFirstChild("HumanoidRootPart") or NewCharacter:WaitForChild("HumanoidRootPart")
+    playerHumanoid = NewCharacter:FindFirstChild("Humanoid") or NewCharacter:WaitForChild("Humanoid")
+    cameraAnchor.CFrame = playerHumanoidRootPart.CFrame
+    
+    if TargetstrafeConfig.Toggled then
+        Camera.CameraSubject = cameraAnchor
+    else
+        Camera.CameraSubject = playerHumanoid
+        clearAfterimageTail()
+    end
+end)
+
+--> Main Render Loop <--
+RunService.Heartbeat:Connect(function(deltaTime)
+    -- Update camera anchor to follow real player position with offset
+    local realCFrame = playerHumanoidRootPart.CFrame
+    if TargetstrafeConfig.Toggled then
+        cameraAnchor.CFrame = realCFrame * CFrame.new(0, 2, 0)
+    end
+    
+    if TargetstrafeConfig.Toggled and target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local targetRootPart = target.Character.HumanoidRootPart
+        local originalVelocity = playerHumanoidRootPart.AssemblyLinearVelocity
+        
+        -- Update angle based on speed and deltaTime
+        angle = angle + TargetstrafeConfig.Speed * deltaTime
+        
+        -- Calculate new desync position around target
+        local offsetX = math.cos(angle) * TargetstrafeConfig.Radius
+        local offsetZ = math.sin(angle) * TargetstrafeConfig.Radius
+        local desyncPosition = targetRootPart.Position + Vector3.new(offsetX, TargetstrafeConfig.HeightOffset, offsetZ)
+        
+        -- Create afterimage tail with interval
+        local currentTime = tick()
+        if currentTime - lastAfterimageTime >= TargetstrafeConfig.AfterimageInterval then
+            updateAfterimageTail(desyncPosition)
+            lastAfterimageTime = currentTime
+        end
+        
+        -- Apply desync position
+        playerHumanoidRootPart.CFrame = CFrame.new(desyncPosition)
+        playerHumanoidRootPart.AssemblyLinearVelocity = Vector3.new(5000, 5000, 5000)
+        
+        -- Wait for one render frame
+        RunService.RenderStepped:Wait()
+        
+        -- Restore real CFrame and velocity
+        playerHumanoidRootPart.CFrame = realCFrame
+        playerHumanoidRootPart.AssemblyLinearVelocity = originalVelocity
+    end
+    
+    -- Update all boxes
+    for _, box in ipairs(boxCache) do
+        update3DBox(box)
+    end
+    
+    -- Clean up old boxes
+    cleanUpBoxes()
+end)
