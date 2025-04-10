@@ -1,0 +1,71 @@
+-- SETTINGS
+local Keybind = Enum.KeyCode.C  -- Клавиша для выбора цели
+
+-- SERVICES
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- VARIABLES
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
+local Target = nil  -- Хранит выбранную цель
+local Character = LocalPlayer.Character
+
+-- Функция для поиска ближайшего игрока к курсору
+local function GetClosestToMouse()
+    local ClosestTarget, ClosestDistance = nil, math.huge
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local Position, OnScreen = Camera:WorldToScreenPoint(player.Character.HumanoidRootPart.Position)
+            local Distance = (Vector2.new(Position.X, Position.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+            if Distance < ClosestDistance and OnScreen then
+                ClosestDistance = Distance
+                ClosestTarget = player
+            end
+        end
+    end
+    return ClosestTarget
+end
+
+-- Выбор цели по нажатию клавиши
+UserInputService.InputBegan:Connect(function(Input, gameProcessedEvent)
+    if gameProcessedEvent then return end
+    if Input.KeyCode == Keybind then
+        if Target == nil then
+            Target = GetClosestToMouse()
+            if Target then
+                warn("Locked on to: " .. Target.Name)
+            else
+                warn("No target found")
+            end
+        else
+            warn("Unlocked from: " .. Target.Name)
+            Target = nil
+        end
+    end
+end)
+
+-- Обработка появления нового персонажа
+local function SetupCharacter(char)
+    Character = char
+    char.ChildAdded:Connect(function(tool)
+        if tool:IsA("Tool") then
+            tool.Activated:Connect(function()
+                if Target and Target.Character and Target.Character:FindFirstChild("HumanoidRootPart") then
+                    local Hit = Target.Character.HumanoidRootPart.CFrame.Position
+                    local PlayerVelocity = Target.Character.HumanoidRootPart.Velocity
+                    -- Отправка данных серверу с учетом скорости цели
+                    ReplicatedStorage.MainEvent:FireServer("UpdateMousePos", Hit + PlayerVelocity * 0.141245121)
+                end
+            end)
+        end
+    end)
+end
+
+-- Подключение к текущему и новым персонажам
+if Character then
+    SetupCharacter(Character)
+end
+LocalPlayer.CharacterAdded:Connect(SetupCharacter)
