@@ -1,0 +1,123 @@
+--[[
+
+░█─── █▀▀ █▀▀█ █─█ █▀▀ █▀▀▄ 　 █▀▀▄ █──█ 
+░█─── █▀▀ █▄▄█ █▀▄ █▀▀ █──█ 　 █▀▀▄ █▄▄█ 
+░█▄▄█ ▀▀▀ ▀──▀ ▀─▀ ▀▀▀ ▀▀▀─ 　 ▀▀▀─ ▄▄▄█ 
+──▀ █▀▀█ █▀▄▀█ █─█ █── █▀▀ █▀▀ 
+──█ █▄▄█ █─▀─█ █▀▄ █── █▀▀ ▀▀█ 
+█▄█ ▀──▀ ▀───▀ ▀─▀ ▀▀▀ ▀▀▀ ▀▀▀
+
+]]
+
+--> Services <--
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+--> LocalPlayer Variables <--
+local player = Players.LocalPlayer
+local playerCharacter = player.Character or player:WaitForChild("Character")
+local playerHumanoidRootPart = playerCharacter:FindFirstChild("HumanoidRootPart") or playerCharacter:WaitForChild("HumanoidRootPart")
+local camera = game.Workspace.CurrentCamera
+
+--> Create Camera Anchor Part <--
+local cameraAnchor = Instance.new("Part")
+cameraAnchor.Name = "CameraAnchor"
+cameraAnchor.Anchored = true -- Чтобы не падала и не двигалась физически
+cameraAnchor.CanCollide = false -- Чтобы не мешала физике
+cameraAnchor.Transparency = 1 -- Невидима
+cameraAnchor.Size = Vector3.new(1, 1, 1)
+cameraAnchor.Parent = game.Workspace
+cameraAnchor.CFrame = playerHumanoidRootPart.CFrame -- Изначально совпадает с игроком
+
+--> Set Camera to Follow Anchor <--
+camera.CameraSubject = cameraAnchor
+
+--> Targetstrafe Config <--
+getgenv().TargetstrafeConfig = {
+    Toggled = false,           -- Включён ли targetstrafe
+    Speed = 2,                -- Скорость вращения вокруг цели (радианы в секунду)
+    Radius = 10,              -- Радиус вращения вокруг цели
+    HeightOffset = 3,         -- Смещение по высоте относительно цели
+}
+
+--> Variables for Targetstrafe <--
+local target = nil            -- Цель (другой игрок)
+local angle = 0               -- Текущий угол вращения
+
+--> Function to Find Nearest Player <--
+local function getNearestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = math.huge
+    
+    for _, otherPlayer in pairs(Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            local distance = (playerHumanoidRootPart.Position - otherPlayer.Character.HumanoidRootPart.Position).Magnitude
+            if distance < shortestDistance then
+                shortestDistance = distance
+                closestPlayer = otherPlayer
+            end
+        end
+    end
+    
+    return closestPlayer
+end
+
+--> Handle Key Press to Select Target <--
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.E then
+        if not TargetstrafeConfig.Toggled then
+            target = getNearestPlayer()
+            if target then
+                TargetstrafeConfig.Toggled = true
+                print("Targetstrafe enabled on: " .. target.Name)
+            else
+                print("No target found!")
+            end
+        else
+            TargetstrafeConfig.Toggled = false
+            target = nil
+            print("Targetstrafe disabled")
+        end
+    end
+end)
+
+--> Handle Character Respawn <--
+player.CharacterAdded:Connect(function(NewCharacter)
+    playerCharacter = NewCharacter
+    playerHumanoidRootPart = NewCharacter:FindFirstChild("HumanoidRootPart") or NewCharacter:WaitForChild("HumanoidRootPart")
+    cameraAnchor.CFrame = playerHumanoidRootPart.CFrame -- Обновляем позицию якоря
+    camera.CameraSubject = cameraAnchor -- Перепривязываем камеру
+end)
+
+--> Targetstrafe Desync Function <--
+RunService.Heartbeat:Connect(function(deltaTime)
+    -- Update camera anchor to follow real player position with offset
+    local realCFrame = playerHumanoidRootPart.CFrame
+    cameraAnchor.CFrame = realCFrame * CFrame.new(0, 2, 0) -- Смещение вверх на 2 студса для соответствия стандартной камере
+    
+    if TargetstrafeConfig.Toggled and target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+        local targetRootPart = target.Character.HumanoidRootPart
+        local originalVelocity = playerHumanoidRootPart.AssemblyLinearVelocity
+        
+        -- Update angle based on speed and deltaTime
+        angle = angle + TargetstrafeConfig.Speed * deltaTime
+        
+        -- Calculate new desync position around target
+        local offsetX = math.cos(angle) * TargetstrafeConfig.Radius
+        local offsetZ = math.sin(angle) * TargetstrafeConfig.Radius
+        local desyncPosition = targetRootPart.Position + Vector3.new(offsetX, TargetstrafeConfig.HeightOffset, offsetZ)
+        
+        -- Apply desync position
+        playerHumanoidRootPart.CFrame = CFrame.new(desyncPosition)
+        playerHumanoidRootPart.AssemblyLinearVelocity = Vector3.new(5000, 5000, 5000) -- High velocity for desync
+        
+        -- Wait for one render frame
+        RunService.RenderStepped:Wait()
+        
+        -- Restore real CFrame and velocity
+        playerHumanoidRootPart.CFrame = realCFrame
+        playerHumanoidRootPart.AssemblyLinearVelocity = originalVelocity
+    end
+end)
