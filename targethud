@@ -25,7 +25,7 @@ local SETTINGS = {
         NoTarget = Color3.fromRGB(100, 100, 100),
         Glow = Color3.fromRGB(180, 50, 255),
         Pulse = Color3.fromRGB(255, 50, 50),
-        Blood = Color3.fromRGB(200, 0, 0) -- Цвет эффекта крови
+        Blood = Color3.fromRGB(200, 0, 0)
     },
     Sizes = {
         Width = 300,
@@ -48,7 +48,7 @@ local SETTINGS = {
         DragScale = 0.95,
         BounceTime = 0.3,
         PulseMoveTime = 0.8,
-        BloodFlashTime = 0.4 -- Время эффекта крови
+        BloodFlashTime = 0.4
     }
 }
 
@@ -223,12 +223,28 @@ HealthPulse.ZIndex = 13
 HealthPulse.Visible = false
 HealthPulse.Parent = HealthBar
 
+local HealthNumber = Instance.new("TextLabel")
+HealthNumber.Name = "HealthNumber"
+HealthNumber.Size = UDim2.new(0, SETTINGS.Sizes.BarWidth, 0, SETTINGS.Sizes.BarHeight)
+HealthNumber.Position = UDim2.new(0, 0, 0, 0)
+HealthNumber.BackgroundTransparency = 1
+HealthNumber.Text = ""
+HealthNumber.TextColor3 = SETTINGS.Colors.TextHighlight
+HealthNumber.TextSize = 10
+HealthNumber.Font = SETTINGS.Fonts.Main
+HealthNumber.TextXAlignment = Enum.TextXAlignment.Center
+HealthNumber.TextYAlignment = Enum.TextYAlignment.Center
+HealthNumber.TextStrokeTransparency = 0.7
+HealthNumber.TextStrokeColor3 = Color3.fromRGB(10, 10, 20)
+HealthNumber.ZIndex = 14
+HealthNumber.Parent = HealthBar
+
 local HealthText = Instance.new("TextLabel")
 HealthText.Name = "HealthText"
 HealthText.Size = UDim2.new(0, 60, 0, 20)
 HealthText.Position = UDim2.new(0, SETTINGS.Sizes.BarWidth + 10, 0, 37)
 HealthText.BackgroundTransparency = 1
-HealthText.Text = "-- HP"
+HealthText.Text = "--"
 HealthText.TextColor3 = SETTINGS.Colors.NoTarget
 HealthText.TextSize = 14
 HealthText.Font = SETTINGS.Fonts.Secondary
@@ -279,12 +295,28 @@ ArmorPulse.ZIndex = 13
 ArmorPulse.Visible = false
 ArmorPulse.Parent = ArmorBar
 
+local ArmorNumber = Instance.new("TextLabel")
+ArmorNumber.Name = "ArmorNumber"
+ArmorNumber.Size = UDim2.new(0, SETTINGS.Sizes.BarWidth, 0, SETTINGS.Sizes.BarHeight)
+ArmorNumber.Position = UDim2.new(0, 0, 0, 0)
+ArmorNumber.BackgroundTransparency = 1
+ArmorNumber.Text = ""
+ArmorNumber.TextColor3 = SETTINGS.Colors.TextHighlight
+ArmorNumber.TextSize = 10
+ArmorNumber.Font = SETTINGS.Fonts.Main
+ArmorNumber.TextXAlignment = Enum.TextXAlignment.Center
+ArmorNumber.TextYAlignment = Enum.TextYAlignment.Center
+ArmorNumber.TextStrokeTransparency = 0.7
+ArmorNumber.TextStrokeColor3 = Color3.fromRGB(10, 10, 20)
+ArmorNumber.ZIndex = 14
+ArmorNumber.Parent = ArmorBar
+
 local ArmorText = Instance.new("TextLabel")
 ArmorText.Name = "ArmorText"
 ArmorText.Size = UDim2.new(0, 80, 0, 20)
 ArmorText.Position = UDim2.new(0, SETTINGS.Sizes.BarWidth + 10, 0, 49)
 ArmorText.BackgroundTransparency = 1
-ArmorText.Text = "-- ARMOR"
+ArmorText.Text = "--"
 ArmorText.TextColor3 = SETTINGS.Colors.NoTarget
 ArmorText.TextSize = 14
 ArmorText.Font = SETTINGS.Fonts.Secondary
@@ -415,7 +447,6 @@ end
 local function PlayBloodEffect()
     if activeTweens.bloodFlash then activeTweens.bloodFlash:Cancel() end
     
-    -- Появление эффекта крови
     BloodEffect.BackgroundTransparency = 0.6
     activeTweens.bloodFlash = TweenService:Create(
         BloodEffect,
@@ -465,10 +496,12 @@ local function ResetToNoTarget()
     PlayerIcon.BackgroundColor3 = SETTINGS.Colors.NoTarget
     Username.Text = "NO TARGET"
     Username.TextColor3 = SETTINGS.Colors.NoTarget
-    HealthText.Text = "-- HP"
+    HealthText.Text = "--"
     HealthText.TextColor3 = SETTINGS.Colors.NoTarget
-    ArmorText.Text = "-- ARMOR"
+    ArmorText.Text = "--"
     ArmorText.TextColor3 = SETTINGS.Colors.NoTarget
+    HealthNumber.Text = ""
+    ArmorNumber.Text = ""
     Divider.BackgroundColor3 = SETTINGS.Colors.NoTarget
     TopBar.BackgroundColor3 = SETTINGS.Colors.NoTarget
     
@@ -500,6 +533,8 @@ local function SetHasTarget()
     Username.TextColor3 = SETTINGS.Colors.TextHighlight
     HealthText.TextColor3 = SETTINGS.Colors.Health
     ArmorText.TextColor3 = SETTINGS.Colors.Armor
+    HealthNumber.TextColor3 = SETTINGS.Colors.TextHighlight
+    ArmorNumber.TextColor3 = SETTINGS.Colors.TextHighlight
     Divider.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
     PlayerIcon.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
     
@@ -565,7 +600,7 @@ local function UpdateTargetHUD(player)
                 TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
                 {Size = UDim2.new(healthPercent, 0, 1, 0)}
             ):Play()
-            HealthText.Text = string.format("%d HP", math.floor(health))
+            HealthNumber.Text = tostring(math.floor(health))
             PlayBounceAnimation(HealthFill, "healthBounce")
             PlayPulseEffect(HealthPulse, health)
             lastHealth = health
@@ -585,7 +620,7 @@ local function UpdateTargetHUD(player)
                 TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
                 {Size = UDim2.new(armorPercent, 0, 1, 0)}
             ):Play()
-            ArmorText.Text = string.format("%d ARMOR", math.floor(armorValue))
+            ArmorNumber.Text = tostring(math.floor(armorValue))
             PlayBounceAnimation(ArmorFill, "armorBounce")
             PlayPulseEffect(ArmorPulse, armorValue)
             lastArmor = armorValue
@@ -607,8 +642,10 @@ local function UpdateTargetHUD(player)
             {Size = UDim2.new(0, 0, 1, 0)}
         ):Play()
         
-        HealthText.Text = "0 HP"
-        ArmorText.Text = "0 ARMOR"
+        HealthNumber.Text = ""
+        ArmorNumber.Text = ""
+        HealthText.Text = "--"
+        ArmorText.Text = "--"
         
         HealthPulse.Visible = false
         ArmorPulse.Visible = false
