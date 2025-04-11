@@ -1,0 +1,53 @@
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = game.Players.LocalPlayer
+local fireRate = 0.05 -- Задержка между активациями (в секундах)
+local isFiring = false
+
+-- Попытка уменьшить задержки через debug (из вашего скрипта)
+local function reduceCooldowns(tool)
+    if tool and getconnections then
+        for _, connection in ipairs(getconnections(tool.Activated)) do
+            local func = connection.Function
+            if func then
+                local funcInfo = debug.getinfo(func)
+                for i = 1, funcInfo.nups do
+                    local c, n = debug.getupvalue(func, i)
+                    if type(c) == "number" then
+                        debug.setupvalue(func, i, 0.01) -- Устанавливаем небольшую задержку
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Функция активации инструмента
+local function activateTool()
+    local tool = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if tool then
+        -- Проверяем, можно ли уменьшить задержки
+        reduceCooldowns(tool)
+        -- Пытаемся активировать инструмент
+        if tool.Activate then
+            tool:Activate() -- Стандартный метод активации
+        end
+        print("Инструмент активирован!")
+    end
+end
+
+-- Отслеживание ЛКМ
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and not gameProcessed then
+        isFiring = true
+        while isFiring do
+            activateTool()
+            task.wait(fireRate)
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isFiring = false
+    end
+end)
