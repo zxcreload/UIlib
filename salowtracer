@@ -1,136 +1,328 @@
--- SETTINGS
-local Keybind = Enum.KeyCode.C  -- Клавиша для выбора цели
+-- =====================
+--        SETTINGS
+-- =====================
+local Settings = {
+    Keybind = Enum.KeyCode.C,  -- Клавиша для выбора цели
+    
+    -- Основные настройки аимбота
+    Main = {
+        FOV = 100,              -- Радиус поиска целей (в пикселях)
+        Prediction = 0.141245121, -- Множитель предсказания движения
+        WallCheck = true,       -- Проверка на стены перед выбором цели
+        RagdollCheck = true,    -- Проверка на ragdoll перед выбором цели
+        RagdollAiming = false,  -- Целиться ли в ragdoll-цели
+    },
+    
+    -- Настройки приоритета частей тела
+    Priority = {
+        Enabled = true,         -- Включить систему приоритетов
+        DynamicPart = true,     -- Динамическое изменение части тела
+        Parts = {               -- Части тела и их приоритет (чем выше, тем важнее)
+            ["Head"] = 100,
+            ["UpperTorso"] = 80,
+            ["LowerTorso"] = 70,
+            ["HumanoidRootPart"] = 60,
+            ["LeftUpperArm"] = 50,
+            ["RightUpperArm"] = 50,
+            ["LeftLowerArm"] = 40,
+            ["RightLowerArm"] = 40,
+            ["LeftUpperLeg"] = 30,
+            ["RightUpperLeg"] = 30,
+            ["LeftLowerLeg"] = 20,
+            ["RightLowerLeg"] = 20,
+            ["LeftFoot"] = 10,
+            ["RightFoot"] = 10,
+        }
+    },
+    
+    -- Настройки визуализации FOV
+    FOVVisuals = {
+        Enabled = true,         -- Включить визуализацию FOV
+        Color = Color3.fromRGB(255, 0, 0), -- Цвет круга
+        Transparency = 0.7,     -- Прозрачность (0-1)
+        Thickness = 1,         -- Толщина линии
+        Filled = false         -- Залитый круг или только контур
+    }
+}
 
--- SERVICES
+-- =====================
+--       SERVICES
+-- =====================
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService") -- Для обновления трассира
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local GuiService = game:GetService("GuiService")
 
--- VARIABLES
+-- =====================
+--       VARIABLES
+-- =====================
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
+local Camera = Workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
-local Target = nil  -- Хранит выбранную цель
+local Target = nil          -- Текущая цель
+local TargetPart = nil      -- Текущая часть тела цели
 local Character = LocalPlayer.Character
-local TracerBeam = nil -- Переменная для трассирующей линии
+local TracerBeam = nil      -- Трассирующая линия
 local StartAttachment = nil -- Точка начала трассира
-local EndAttachment = nil -- Точка конца трассира
+local EndAttachment = nil   -- Точка конца трассира
+local FOVCircle = nil       -- Визуализация FOV
 
--- Функция для создания трассира
+-- =====================
+--       FUNCTIONS
+-- =====================
+
+-- Создание визуализации FOV
+local function CreateFOV()
+    if not Settings.FOVVisuals.Enabled then return end
+    
+    FOVCircle = Drawing.new("Circle")
+    FOVCircle.Visible = true
+    FOVCircle.Transparency = Settings.FOVVisuals.Transparency
+    FOVCircle.Color = Settings.FOVVisuals.Color
+    FOVCircle.Thickness = Settings.FOVVisuals.Thickness
+    FOVCircle.Filled = Settings.FOVVisuals.Filled
+    FOVCircle.Radius = Settings.Main.FOV
+    FOVCircle.NumSides = 100
+    FOVCircle.Position = Vector2.new(Mouse.X, Mouse.Y + GuiService:GetGuiInset().Y)
+end
+
+-- Обновление позиции FOV
+local function UpdateFOV()
+    if not FOVCircle then return end
+    FOVCircle.Position = Vector2.new(Mouse.X, Mouse.Y + GuiService:GetGuiInset().Y)
+    FOVCircle.Radius = Settings.Main.FOV
+end
+
+-- Создание трассира
 local function CreateTracer()
-    -- Создаем Part для хранения Attachments (невидимый)
     local StartPart = Instance.new("Part")
     StartPart.Anchored = true
     StartPart.CanCollide = false
     StartPart.Transparency = 1
-    StartPart.Parent = workspace
+    StartPart.Parent = Workspace
 
     local EndPart = Instance.new("Part")
     EndPart.Anchored = true
     EndPart.CanCollide = false
     EndPart.Transparency = 1
-    EndPart.Parent = workspace
+    EndPart.Parent = Workspace
 
-    -- Создаем Attachments
     StartAttachment = Instance.new("Attachment")
     StartAttachment.Parent = StartPart
     EndAttachment = Instance.new("Attachment")
     EndAttachment.Parent = EndPart
 
-    -- Создаем Beam
     TracerBeam = Instance.new("Beam")
     TracerBeam.Attachment0 = StartAttachment
     TracerBeam.Attachment1 = EndAttachment
-    TracerBeam.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0)) -- Красный цвет
+    TracerBeam.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0))
     TracerBeam.Brightness = 1
     TracerBeam.Width0 = 0.2
     TracerBeam.Width1 = 0.2
-    TracerBeam.Enabled = false -- По умолчанию выключен
-    TracerBeam.Parent = workspace
+    TracerBeam.Enabled = false
+    TracerBeam.Parent = Workspace
 end
 
--- Функция для обновления трассира
-local function UpdateTracer()
-    if TracerBeam and StartAttachment and EndAttachment and Target and Target.Character and Target.Character:FindFirstChild("HumanoidRootPart") then
-        -- Обновляем позицию начальной точки (например, у головы игрока)
-        if Character and Character:FindFirstChild("Head") then
-            StartAttachment.Parent.Position = Character.Head.Position
-        end
-        -- Вычисляем предсказанную точку
-        local Hit = Target.Character.HumanoidRootPart.CFrame.Position
-        local PlayerVelocity = Target.Character.HumanoidRootPart.Velocity
-        local PredictedPosition = Hit + PlayerVelocity * 0.141245121
-        -- Обновляем позицию конечной точки (предсказанная точка)
-        EndAttachment.Parent.Position = PredictedPosition
-        TracerBeam.Enabled = true
-    else
-        -- Отключаем трассир, если цель потеряна
-        if TracerBeam then
-            TracerBeam.Enabled = false
+-- Проверка видимости части тела
+local function IsPartVisible(part)
+    if not part then return false end
+    
+    local character = part:FindFirstAncestorOfClass("Model")
+    if not character then return false end
+    
+    local origin = Camera.CFrame.Position
+    local _, onScreen = Camera:WorldToViewportPoint(part.Position)
+    
+    if not onScreen then return false end
+    
+    if Settings.Main.WallCheck then
+        local direction = (part.Position - origin).Unit * (origin - part.Position).Magnitude
+        local raycastParams = RaycastParams.new()
+        raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, character}
+        raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+        
+        local raycastResult = Workspace:Raycast(origin, direction, raycastParams)
+        if raycastResult then
+            local hitPart = raycastResult.Instance
+            return hitPart:IsDescendantOf(character)
         end
     end
+    
+    return true
 end
 
--- Функция для поиска ближайшего игрока к курсору
+-- Получение лучшей видимой части тела
+local function GetBestVisiblePart(character)
+    if not Settings.Priority.Enabled then
+        return character:FindFirstChild("HumanoidRootPart")
+    end
+    
+    local bestPart, bestPriority = nil, -1
+    
+    -- Сортируем части тела по приоритету
+    local sortedParts = {}
+    for partName, priority in pairs(Settings.Priority.Parts) do
+        table.insert(sortedParts, {Name = partName, Priority = priority})
+    end
+    table.sort(sortedParts, function(a, b) return a.Priority > b.Priority end)
+    
+    -- Ищем лучшую видимую часть
+    for _, partData in ipairs(sortedParts) do
+        local part = character:FindFirstChild(partData.Name)
+        if part and IsPartVisible(part) then
+            return part
+        end
+    end
+    
+    -- Если ничего не найдено, возвращаем HumanoidRootPart (если виден)
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if rootPart and IsPartVisible(rootPart) then
+        return rootPart
+    end
+    
+    return nil
+end
+
+-- Проверка на ragdoll
+local function IsRagdoll(character)
+    if not Settings.Main.RagdollCheck then return false end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    return humanoid and humanoid.Health <= 0
+end
+
+-- Поиск ближайшей цели к курсору
 local function GetClosestToMouse()
-    local ClosestTarget, ClosestDistance = nil, math.huge
+    local closestTarget, closestDistance = nil, Settings.Main.FOV
+    
     for _, player in pairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local Position, OnScreen = Camera:WorldToScreenPoint(player.Character.HumanoidRootPart.Position)
-            local Distance = (Vector2.new(Position.X, Position.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-            if Distance < ClosestDistance and OnScreen then
-                ClosestDistance = Distance
-                ClosestTarget = player
+        if player ~= LocalPlayer and player.Character then
+            -- Проверка на ragdoll
+            if IsRagdoll(player.Character) and not Settings.Main.RagdollAiming then
+                continue
+            end
+            
+            local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                local position, onScreen = Camera:WorldToScreenPoint(rootPart.Position)
+                if onScreen then
+                    local distance = (Vector2.new(position.X, position.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                    
+                    if distance < closestDistance then
+                        -- Проверка видимости (если включено)
+                        if Settings.Main.WallCheck then
+                            local bestPart = GetBestVisiblePart(player.Character)
+                            if bestPart then
+                                closestTarget = player
+                                closestDistance = distance
+                                TargetPart = bestPart
+                            end
+                        else
+                            closestTarget = player
+                            closestDistance = distance
+                            TargetPart = rootPart
+                        end
+                    end
+                end
             end
         end
     end
-    return ClosestTarget
+    
+    return closestTarget
 end
 
--- Выбор цели по нажатию клавиши
-UserInputService.InputBegan:Connect(function(Input, gameProcessedEvent)
+-- Обновление трассира
+local function UpdateTracer()
+    if TracerBeam and StartAttachment and EndAttachment and Target and Target.Character then
+        -- Динамическое обновление части тела
+        if Settings.Priority.DynamicPart then
+            local newPart = GetBestVisiblePart(Target.Character)
+            if newPart then
+                TargetPart = newPart
+            end
+        end
+        
+        if TargetPart and TargetPart.Parent then
+            -- Обновляем позицию начальной точки
+            if Character and Character:FindFirstChild("Head") then
+                StartAttachment.Parent.Position = Character.Head.Position
+            end
+            
+            -- Вычисляем предсказанную точку
+            local hit = TargetPart.CFrame.Position
+            local velocity = TargetPart.Velocity
+            local predictedPosition = hit + velocity * Settings.Main.Prediction
+            
+            -- Обновляем позицию конечной точки
+            EndAttachment.Parent.Position = predictedPosition
+            TracerBeam.Enabled = true
+            return
+        end
+    end
+    
+    -- Отключаем трассир, если цель потеряна
+    if TracerBeam then
+        TracerBeam.Enabled = false
+    end
+end
+
+-- Обработка выбора цели
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
     if gameProcessedEvent then return end
-    if Input.KeyCode == Keybind then
+    if input.KeyCode == Settings.Keybind then
         if Target == nil then
             Target = GetClosestToMouse()
             if Target then
-                warn("Locked on to: " .. Target.Name)
+                warn("Locked on to: " .. Target.Name .. " (" .. TargetPart.Name .. ")")
             else
                 warn("No target found")
             end
         else
             warn("Unlocked from: " .. Target.Name)
             Target = nil
+            TargetPart = nil
         end
     end
 end)
 
--- Обработка появления нового персонажа
+-- Обработка активации оружия
 local function SetupCharacter(char)
     Character = char
     char.ChildAdded:Connect(function(tool)
         if tool:IsA("Tool") then
             tool.Activated:Connect(function()
-                if Target and Target.Character and Target.Character:FindFirstChild("HumanoidRootPart") then
-                    local Hit = Target.Character.HumanoidRootPart.CFrame.Position
-                    local PlayerVelocity = Target.Character.HumanoidRootPart.Velocity
-                    -- Отправка данных серверу с учетом скорости цели
-                    ReplicatedStorage.MainEvent:FireServer("UpdateMousePos", Hit + PlayerVelocity * 0.141245121)
+                if Target and TargetPart then
+                    local hit = TargetPart.CFrame.Position
+                    local velocity = TargetPart.Velocity
+                    local predictedPosition = hit + velocity * Settings.Main.Prediction
+                    
+                    -- Отправка данных серверу
+                    ReplicatedStorage.MainEvent:FireServer("UpdateMousePos", predictedPosition)
                 end
             end)
         end
     end)
 end
 
--- Инициализация трассира
+-- Инициализация
+CreateFOV()
 CreateTracer()
 
--- Обновление трассира каждый кадр
-RunService.RenderStepped:Connect(UpdateTracer)
+RunService.RenderStepped:Connect(function()
+    UpdateFOV()
+    UpdateTracer()
+end)
 
--- Подключение к текущему и новым персонажам
 if Character then
     SetupCharacter(Character)
 end
 LocalPlayer.CharacterAdded:Connect(SetupCharacter)
+
+-- Очистка при отключении
+game:GetService("UserInputService").WindowFocusReleased:Connect(function()
+    if FOVCircle then
+        FOVCircle:Remove()
+        FOVCircle = nil
+    end
+end)
