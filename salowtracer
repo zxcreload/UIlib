@@ -1,38 +1,22 @@
+-- Убедимся, что код выполняется на клиенте
+if not game:GetService("RunService"):IsClient() then
+    error("This script must run in a LocalScript on the client!")
+end
+
 -- =====================
 --        SETTINGS
 -- =====================
 local Settings = {
     Keybind = Enum.KeyCode.C,  -- Клавиша для выбора цели
+    TargetPart = "UpperTorso", -- Фиксированная часть тела для прицеливания
     
     -- Основные настройки аимбота
     Main = {
         FOV = 100,              -- Радиус поиска целей (в пикселях)
         Prediction = 0.141245121, -- Множитель предсказания движения
-        WallCheck = true,       -- Проверка на стены перед выбором цели
+        WallCheck = false,       -- Проверка на стены перед выбором цели
         RagdollCheck = true,    -- Проверка на ragdoll перед выбором цели
         RagdollAiming = false,  -- Целиться ли в ragdoll-цели
-    },
-    
-    -- Настройки приоритета частей тела
-    Priority = {
-        Enabled = true,         -- Включить систему приоритетов
-        DynamicPart = true,     -- Динамическое изменение части тела
-        Parts = {               -- Части тела и их приоритет (чем выше, тем важнее)
-            ["Head"] = 100,
-            ["UpperTorso"] = 80,
-            ["LowerTorso"] = 70,
-            ["HumanoidRootPart"] = 60,
-            ["LeftUpperArm"] = 50,
-            ["RightUpperArm"] = 50,
-            ["LeftLowerArm"] = 40,
-            ["RightLowerArm"] = 40,
-            ["LeftUpperLeg"] = 30,
-            ["RightUpperLeg"] = 30,
-            ["LeftLowerLeg"] = 20,
-            ["RightLowerLeg"] = 20,
-            ["LeftFoot"] = 10,
-            ["RightFoot"] = 10,
-        }
     },
     
     -- Настройки визуализации FOV
@@ -40,8 +24,66 @@ local Settings = {
         Enabled = true,         -- Включить визуализацию FOV
         Color = Color3.fromRGB(255, 0, 0), -- Цвет круга
         Transparency = 0.7,     -- Прозрачность (0-1)
-        Thickness = 1,         -- Толщина линии
-        Filled = false         -- Залитый круг или только контур
+        Thickness = 1,          -- Толщина линии
+        Filled = false          -- Залитый круг или только контур
+    },
+
+    -- Настройки TargetHUD
+    TargetHUD = {
+        Mode = "Top",           -- Режим позиции: "Top", "Bottom", "Right", "Left"
+        BaseSize = Vector2.new(300, 130), -- Базовый размер HUD
+        MinScale = 0.7,         -- Минимальный масштаб
+        MaxScale = 1.5,         -- Максимальный масштаб
+        BaseDistance = 10,      -- Базовое расстояние для масштабирования (в студсах)
+        Offset = 20,            -- Смещение от цели в пикселях
+        InitialOffset = Vector2.new(0, 0) -- Начальное смещение HUD относительно цели (X, Y)
+    }
+}
+
+-- Глобальные настройки стиля для TargetHUD
+local SETTINGS = {
+    Colors = {
+        Background = Color3.fromRGB(20, 20, 25),
+        Background2 = Color3.fromRGB(30, 30, 40),
+        Accent = Color3.fromRGB(180, 50, 255),
+        Text = Color3.fromRGB(240, 240, 240),
+        TextHighlight = Color3.fromRGB(255, 255, 255),
+        Health = Color3.fromRGB(255, 80, 80),
+        HealthDark = Color3.fromRGB(200, 50, 50),
+        HealthWarning = Color3.fromRGB(255, 20, 20),
+        Armor = Color3.fromRGB(80, 160, 255),
+        ArmorDark = Color3.fromRGB(50, 120, 200),
+        ArmorWarning = Color3.fromRGB(20, 120, 255),
+        HealthBackground = Color3.fromRGB(50, 20, 25),
+        ArmorBackground = Color3.fromRGB(20, 25, 50),
+        IconBorder = Color3.fromRGB(60, 60, 80),
+        NoTarget = Color3.fromRGB(100, 100, 100),
+        Glow = Color3.fromRGB(180, 50, 255),
+        Pulse = Color3.fromRGB(255, 50, 50),
+        Blood = Color3.fromRGB(200, 0, 0)
+    },
+    Sizes = {
+        Width = Settings.TargetHUD.BaseSize.X,
+        Height = Settings.TargetHUD.BaseSize.Y,
+        IconSize = 80,
+        BarHeight = 8,
+        BarWidth = 190,
+        CornerRadius = 8,
+        Spacing = 15,
+        PulseHeight = 2
+    },
+    Fonts = {
+        Main = Enum.Font.GothamBold,
+        Secondary = Enum.Font.GothamMedium
+    },
+    Animations = {
+        FadeTime = 0.3,
+        BarTweenTime = 0.5,
+        PulseTime = 1.5,
+        DragScale = 0.95,
+        BounceTime = 0.3,
+        PulseMoveTime = 0.8,
+        BloodFlashTime = 0.4
     }
 }
 
@@ -54,6 +96,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local GuiService = game:GetService("GuiService")
+local TweenService = game:GetService("TweenService")
 
 -- =====================
 --       VARIABLES
@@ -68,157 +111,804 @@ local TracerBeam = nil      -- Трассирующая линия
 local StartAttachment = nil -- Точка начала трассира
 local EndAttachment = nil   -- Точка конца трассира
 local FOVCircle = nil       -- Визуализация FOV
+local LastMousePos = Vector2.new(0, 0) -- Резервная позиция мыши
+local TargetHUD = nil       -- Переменная для TargetHUD
+local HUDScale = nil        -- Для управления масштабом
+local UpdateTargetHUD, ResetToNoTarget -- Функции TargetHUD
+local HUDShadow, BloodEffect, TopBar, PlayerIcon, Username, HealthText, ArmorText, HealthNumber, ArmorNumber, Divider, HealthFill, ArmorFill, HealthPulse, ArmorPulse
+
+-- =====================
+--       TARGET HUD
+-- =====================
+local function CreateTargetHUD()
+    print("Creating TargetHUD...")
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "CSGOTargetHUD"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ScreenGui.IgnoreGuiInset = true
+    ScreenGui.Parent = PlayerGui
+
+    -- Основной контейнер
+    TargetHUD = Instance.new("Frame")
+    TargetHUD.Name = "TargetHUD"
+    TargetHUD.Size = UDim2.new(0, SETTINGS.Sizes.Width, 0, SETTINGS.Sizes.Height)
+    TargetHUD.BackgroundColor3 = SETTINGS.Colors.Background
+    TargetHUD.BackgroundTransparency = 0.2
+    TargetHUD.BorderSizePixel = 0
+    TargetHUD.ZIndex = 10
+    TargetHUD.Visible = false
+    TargetHUD.Active = true
+    TargetHUD.ClipsDescendants = true
+    TargetHUD.Parent = ScreenGui
+
+    -- Добавляем UIScale для управления масштабом
+    HUDScale = Instance.new("UIScale")
+    HUDScale.Scale = 1
+    HUDScale.Parent = TargetHUD
+
+    local HUDCorner = Instance.new("UICorner")
+    HUDCorner.CornerRadius = UDim.new(0, SETTINGS.Sizes.CornerRadius)
+    HUDCorner.Parent = TargetHUD
+
+    HUDShadow = Instance.new("ImageLabel")
+    HUDShadow.Name = "Shadow"
+    HUDShadow.Size = UDim2.new(1, 20, 1, 20)
+    HUDShadow.Position = UDim2.new(0, -10, 0, -10)
+    HUDShadow.BackgroundTransparency = 1
+    HUDShadow.Image = "rbxassetid://1316045217"
+    HUDShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    HUDShadow.ImageTransparency = 0.7
+    HUDShadow.ScaleType = Enum.ScaleType.Slice
+    HUDShadow.SliceCenter = Rect.new(10, 10, 118, 118)
+    HUDShadow.ZIndex = 9
+    HUDShadow.Parent = TargetHUD
+
+    BloodEffect = Instance.new("Frame")
+    BloodEffect.Name = "BloodEffect"
+    BloodEffect.Size = UDim2.new(1, 0, 1, 0)
+    BloodEffect.BackgroundColor3 = SETTINGS.Colors.Blood
+    BloodEffect.BackgroundTransparency = 1
+    BloodEffect.ZIndex = 15
+    BloodEffect.BorderSizePixel = 0
+    BloodEffect.Parent = TargetHUD
+
+    local BloodCorner = Instance.new("UICorner")
+    BloodCorner.CornerRadius = UDim.new(0, SETTINGS.Sizes.CornerRadius)
+    BloodCorner.Parent = BloodEffect
+
+    TopBar = Instance.new("Frame")
+    TopBar.Name = "TopBar"
+    TopBar.Size = UDim2.new(1, 0, 0, 4)
+    TopBar.BackgroundColor3 = SETTINGS.Colors.NoTarget
+    TopBar.BorderSizePixel = 0
+    TopBar.ZIndex = 11
+    TopBar.Parent = TargetHUD
+
+    local ContentFrame = Instance.new("Frame")
+    ContentFrame.Name = "ContentFrame"
+    ContentFrame.Size = UDim2.new(1, -20, 1, -20)
+    ContentFrame.Position = UDim2.new(0, 10, 0, 10)
+    ContentFrame.BackgroundTransparency = 1
+    ContentFrame.Parent = TargetHUD
+
+    local IconFrame = Instance.new("Frame")
+    IconFrame.Name = "IconFrame"
+    IconFrame.Size = UDim2.new(0, SETTINGS.Sizes.IconSize, 0, SETTINGS.Sizes.IconSize)
+    IconFrame.Position = UDim2.new(0, 0, 0, 0)
+    IconFrame.BackgroundTransparency = 1
+    IconFrame.Parent = ContentFrame
+
+    local IconBorder = Instance.new("Frame")
+    IconBorder.Name = "IconBorder"
+    IconBorder.Size = UDim2.new(1, 0, 1, 0)
+    IconBorder.BackgroundColor3 = SETTINGS.Colors.IconBorder
+    IconBorder.Parent = IconFrame
+
+    local IconGradient = Instance.new("UIGradient")
+    IconGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, SETTINGS.Colors.Accent),
+        ColorSequenceKeypoint.new(1, SETTINGS.Colors.Background2)
+    })
+    IconGradient.Rotation = 45
+    IconGradient.Parent = IconBorder
+
+    local IconCorner = Instance.new("UICorner")
+    IconCorner.CornerRadius = UDim.new(0, SETTINGS.Sizes.CornerRadius)
+    IconCorner.Parent = IconBorder
+
+    PlayerIcon = Instance.new("ImageLabel")
+    PlayerIcon.Name = "PlayerIcon"
+    PlayerIcon.Size = UDim2.new(1, -6, 1, -6)
+    PlayerIcon.Position = UDim2.new(0, 3, 0, 3)
+    PlayerIcon.BackgroundColor3 = SETTINGS.Colors.NoTarget
+    PlayerIcon.Image = ""
+    PlayerIcon.ScaleType = Enum.ScaleType.Crop
+    PlayerIcon.ZIndex = 12
+    PlayerIcon.Parent = IconBorder
+
+    local IconCornerInner = Instance.new("UICorner")
+    IconCornerInner.CornerRadius = UDim.new(0, SETTINGS.Sizes.CornerRadius - 2)
+    IconCornerInner.Parent = PlayerIcon
+
+    local InfoFrame = Instance.new("Frame")
+    InfoFrame.Name = "InfoFrame"
+    InfoFrame.Size = UDim2.new(1, -SETTINGS.Sizes.IconSize - 15, 1, 0)
+    InfoFrame.Position = UDim2.new(0, SETTINGS.Sizes.IconSize + 15, 0, 0)
+    InfoFrame.BackgroundTransparency = 1
+    InfoFrame.ClipsDescendants = true
+    InfoFrame.Parent = ContentFrame
+
+    Username = Instance.new("TextLabel")
+    Username.Name = "Username"
+    Username.Size = UDim2.new(1, -10, 0, 30)
+    Username.Position = UDim2.new(0, 0, 0, 0)
+    Username.BackgroundTransparency = 1
+    Username.Text = "NO TARGET"
+    Username.TextColor3 = SETTINGS.Colors.NoTarget
+    Username.TextSize = 20
+    Username.Font = SETTINGS.Fonts.Main
+    Username.TextXAlignment = Enum.TextXAlignment.Left
+    Username.TextStrokeTransparency = 0.7
+    Username.TextStrokeColor3 = Color3.fromRGB(10, 10, 20)
+    Username.ZIndex = 12
+    Username.Parent = InfoFrame
+
+    local HealthBar = Instance.new("Frame")
+    HealthBar.Name = "HealthBar"
+    HealthBar.Size = UDim2.new(0, SETTINGS.Sizes.BarWidth, 0, SETTINGS.Sizes.BarHeight)
+    HealthBar.Position = UDim2.new(0, 0, 0, 40)
+    HealthBar.BackgroundColor3 = SETTINGS.Colors.HealthBackground
+    HealthBar.BorderSizePixel = 0
+    HealthBar.ZIndex = 11
+    HealthBar.Parent = InfoFrame
+
+    local HealthCorner = Instance.new("UICorner")
+    HealthCorner.CornerRadius = UDim.new(0, 4)
+    HealthCorner.Parent = HealthBar
+
+    HealthFill = Instance.new("Frame")
+    HealthFill.Name = "HealthFill"
+    HealthFill.Size = UDim2.new(0, 0, 1, 0)
+    HealthFill.BackgroundColor3 = SETTINGS.Colors.Health
+    HealthFill.BorderSizePixel = 0
+    HealthFill.ZIndex = 12
+    HealthFill.Parent = HealthBar
+
+    local HealthFillGradient = Instance.new("UIGradient")
+    HealthFillGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, SETTINGS.Colors.Health),
+        ColorSequenceKeypoint.new(1, SETTINGS.Colors.HealthDark)
+    })
+    HealthFillGradient.Rotation = 0
+    HealthFillGradient.Parent = HealthFill
+
+    local HealthFillCorner = Instance.new("UICorner")
+    HealthFillCorner.CornerRadius = UDim.new(0, 4)
+    HealthFillCorner.Parent = HealthFill
+
+    HealthPulse = Instance.new("Frame")
+    HealthPulse.Name = "HealthPulse"
+    HealthPulse.Size = UDim2.new(0, 20, 0, SETTINGS.Sizes.PulseHeight)
+    HealthPulse.Position = UDim2.new(0, 0, 0.5, -SETTINGS.Sizes.PulseHeight / 2)
+    HealthPulse.BackgroundColor3 = SETTINGS.Colors.Pulse
+    HealthPulse.BorderSizePixel = 0
+    HealthPulse.ZIndex = 13
+    HealthPulse.Visible = false
+    HealthPulse.Parent = HealthBar
+
+    HealthNumber = Instance.new("TextLabel")
+    HealthNumber.Name = "HealthNumber"
+    HealthNumber.Size = UDim2.new(1, 0, 1, 0)
+    HealthNumber.Position = UDim2.new(0, 0, 0, 0)
+    HealthNumber.BackgroundTransparency = 1
+    HealthNumber.Text = ""
+    HealthNumber.TextColor3 = SETTINGS.Colors.TextHighlight
+    HealthNumber.TextSize = 10
+    HealthNumber.Font = SETTINGS.Fonts.Main
+    HealthNumber.TextXAlignment = Enum.TextXAlignment.Center
+    HealthNumber.TextYAlignment = Enum.TextYAlignment.Center
+    HealthNumber.TextStrokeTransparency = 0.7
+    HealthNumber.TextStrokeColor3 = Color3.fromRGB(10, 10, 20)
+    HealthNumber.ZIndex = 14
+    HealthNumber.Parent = HealthBar
+
+    HealthText = Instance.new("TextLabel")
+    HealthText.Name = "HealthText"
+    HealthText.Size = UDim2.new(0, 60, 0, 20)
+    HealthText.Position = UDim2.new(0, SETTINGS.Sizes.BarWidth + 10, 0, 37)
+    HealthText.BackgroundTransparency = 1
+    HealthText.Text = "--"
+    HealthText.TextColor3 = SETTINGS.Colors.NoTarget
+    HealthText.TextSize = 14
+    HealthText.Font = SETTINGS.Fonts.Secondary
+    HealthText.TextXAlignment = Enum.TextXAlignment.Left
+    HealthText.ZIndex = 12
+    HealthText.Parent = InfoFrame
+
+    local ArmorBar = Instance.new("Frame")
+    ArmorBar.Name = "ArmorBar"
+    ArmorBar.Size = UDim2.new(0, SETTINGS.Sizes.BarWidth, 0, SETTINGS.Sizes.BarHeight)
+    ArmorBar.Position = UDim2.new(0, 0, 0, 52)
+    ArmorBar.BackgroundColor3 = SETTINGS.Colors.ArmorBackground
+    ArmorBar.BorderSizePixel = 0
+    ArmorBar.ZIndex = 11
+    ArmorBar.Parent = InfoFrame
+
+    local ArmorCorner = Instance.new("UICorner")
+    ArmorCorner.CornerRadius = UDim.new(0, 4)
+    ArmorCorner.Parent = ArmorBar
+
+    ArmorFill = Instance.new("Frame")
+    ArmorFill.Name = "ArmorFill"
+    ArmorFill.Size = UDim2.new(0, 0, 1, 0)
+    ArmorFill.BackgroundColor3 = SETTINGS.Colors.Armor
+    ArmorFill.BorderSizePixel = 0
+    ArmorFill.ZIndex = 12
+    ArmorFill.Parent = ArmorBar
+
+    local ArmorFillGradient = Instance.new("UIGradient")
+    ArmorFillGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, SETTINGS.Colors.Armor),
+        ColorSequenceKeypoint.new(1, SETTINGS.Colors.ArmorDark)
+    })
+    ArmorFillGradient.Rotation = 0
+    ArmorFillGradient.Parent = ArmorFill
+
+    local ArmorFillCorner = Instance.new("UICorner")
+    ArmorFillCorner.CornerRadius = UDim.new(0, 4)
+    ArmorFillCorner.Parent = ArmorFill
+
+    ArmorPulse = Instance.new("Frame")
+    ArmorPulse.Name = "ArmorPulse"
+    ArmorPulse.Size = UDim2.new(0, 20, 0, SETTINGS.Sizes.PulseHeight)
+    ArmorPulse.Position = UDim2.new(0, 0, 0.5, -SETTINGS.Sizes.PulseHeight / 2)
+    ArmorPulse.BackgroundColor3 = SETTINGS.Colors.Pulse
+    ArmorPulse.BorderSizePixel = 0
+    ArmorPulse.ZIndex = 13
+    ArmorPulse.Visible = false
+    ArmorPulse.Parent = ArmorBar
+
+    ArmorNumber = Instance.new("TextLabel")
+    ArmorNumber.Name = "ArmorNumber"
+    ArmorNumber.Size = UDim2.new(1, 0, 1, 0)
+    ArmorNumber.Position = UDim2.new(0, 0, 0, 0)
+    ArmorNumber.BackgroundTransparency = 1
+    ArmorNumber.Text = ""
+    ArmorNumber.TextColor3 = SETTINGS.Colors.TextHighlight
+    ArmorNumber.TextSize = 10
+    ArmorNumber.Font = SETTINGS.Fonts.Main
+    ArmorNumber.TextXAlignment = Enum.TextXAlignment.Center
+    ArmorNumber.TextYAlignment = Enum.TextYAlignment.Center
+    ArmorNumber.TextStrokeTransparency = 0.7
+    ArmorNumber.TextStrokeColor3 = Color3.fromRGB(10, 10, 20)
+    ArmorNumber.ZIndex = 14
+    ArmorNumber.Parent = ArmorBar
+
+    ArmorText = Instance.new("TextLabel")
+    ArmorText.Name = "ArmorText"
+    ArmorText.Size = UDim2.new(0, 80, 0, 20)
+    ArmorText.Position = UDim2.new(0, SETTINGS.Sizes.BarWidth + 10, 0, 49)
+    ArmorText.BackgroundTransparency = 1
+    ArmorText.Text = "--"
+    ArmorText.TextColor3 = SETTINGS.Colors.NoTarget
+    ArmorText.TextSize = 14
+    ArmorText.Font = SETTINGS.Fonts.Secondary
+    ArmorText.TextXAlignment = Enum.TextXAlignment.Left
+    ArmorText.ZIndex = 12
+    ArmorText.Parent = InfoFrame
+
+    Divider = Instance.new("Frame")
+    Divider.Name = "Divider"
+    Divider.Size = UDim2.new(0, 2, 0, 36)
+    Divider.Position = UDim2.new(0, SETTINGS.Sizes.BarWidth + 5, 0, 40)
+    Divider.BackgroundColor3 = SETTINGS.Colors.NoTarget
+    Divider.BorderSizePixel = 0
+    Divider.ZIndex = 11
+    Divider.Parent = InfoFrame
+
+    print("TargetHUD created successfully.")
+
+    -- Функции TargetHUD
+    local function GetPlayerAvatar(userId)
+        return string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=420&height=420&format=png", userId)
+    end
+
+    local function GetArmorValue(player)
+        if not player or not player.Character then return 0 end
+        local success, armorValue = pcall(function()
+            local playerFolder = Workspace:FindFirstChild("Players")
+            if not playerFolder then return 0 end
+            local playerData = playerFolder:FindFirstChild(player.Name)
+            if not playerData then return 0 end
+            local bodyEffects = playerData:FindFirstChild("BodyEffects")
+            if not bodyEffects then return 0 end
+            local armor = bodyEffects:FindFirstChild("Armor")
+            if not armor then return 0 end
+            return tonumber(armor.Value) or 0
+        end)
+        return success and armorValue or 0
+    end
+
+    local function FadeIn()
+        if not TargetHUD or not HUDShadow then return end
+        TweenService:Create(
+            TargetHUD,
+            TweenInfo.new(SETTINGS.Animations.FadeTime, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+            {BackgroundTransparency = 0.2}
+        ):Play()
+        TweenService:Create(
+            HUDShadow,
+            TweenInfo.new(SETTINGS.Animations.FadeTime, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+            {ImageTransparency = 0.7}
+        ):Play()
+    end
+
+    local function FadeOut()
+        if not TargetHUD or not HUDShadow then return end
+        TweenService:Create(
+            TargetHUD,
+            TweenInfo.new(SETTINGS.Animations.FadeTime, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+            {BackgroundTransparency = 0.5}
+        ):Play()
+        TweenService:Create(
+            HUDShadow,
+            TweenInfo.new(SETTINGS.Animations.FadeTime, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+            {ImageTransparency = 0.9}
+        ):Play()
+    end
+
+    local function PulseAccent()
+        if not TopBar then return end
+        local pulse = TweenService:Create(
+            TopBar,
+            TweenInfo.new(SETTINGS.Animations.PulseTime, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+            {BackgroundColor3 = SETTINGS.Colors.Accent}
+        )
+        pulse:Play()
+        pulse.Completed:Connect(function()
+            TweenService:Create(
+                TopBar,
+                TweenInfo.new(SETTINGS.Animations.PulseTime, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                {BackgroundColor3 = Color3.fromRGB(SETTINGS.Colors.Accent.R * 255 * 0.7, SETTINGS.Colors.Accent.G * 255 * 0.7, SETTINGS.Colors.Accent.B * 255 * 0.7)}
+            ):Play()
+        end)
+    end
+
+    local activeTweens = {
+        bloodFlash = nil,
+        healthPulse = nil,
+        armorPulse = nil,
+        healthBounce = nil,
+        armorBounce = nil
+    }
+
+    local function CancelTweens()
+        for _, tween in pairs(activeTweens) do
+            if tween then tween:Cancel() end
+        end
+        activeTweens.bloodFlash = nil
+        activeTweens.healthPulse = nil
+        activeTweens.armorPulse = nil
+        activeTweens.healthBounce = nil
+        activeTweens.armorBounce = nil
+    end
+
+    local function PlayBloodEffect()
+        if not BloodEffect then return end
+        if activeTweens.bloodFlash then activeTweens.bloodFlash:Cancel() end
+        BloodEffect.BackgroundTransparency = 0.6
+        activeTweens.bloodFlash = TweenService:Create(
+            BloodEffect,
+            TweenInfo.new(SETTINGS.Animations.BloodFlashTime, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+            {BackgroundTransparency = 1}
+        )
+        activeTweens.bloodFlash:Play()
+    end
+
+    local function PlayPulseEffect(pulseBar, value)
+        if not pulseBar then return end
+        local pulseKey = (pulseBar == HealthPulse) and "healthPulse" or "armorPulse"
+        if activeTweens[pulseKey] then activeTweens[pulseKey]:Cancel() end
+        if value > 0 and value < 40 then
+            pulseBar.Visible = true
+            activeTweens[pulseKey] = TweenService:Create(
+                pulseBar,
+                TweenInfo.new(SETTINGS.Animations.PulseMoveTime, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, -1),
+                {Position = UDim2.new(1, -20, 0.5, -SETTINGS.Sizes.PulseHeight / 2)}
+            )
+            activeTweens[pulseKey]:Play()
+        else
+            pulseBar.Visible = false
+            pulseBar.Position = UDim2.new(0, 0, 0.5, -SETTINGS.Sizes.PulseHeight / 2)
+        end
+    end
+
+    local function PlayBounceAnimation(bar, bounceKey)
+        if not bar then return end
+        if activeTweens[bounceKey] then activeTweens[bounceKey]:Cancel() end
+        activeTweens[bounceKey] = TweenService:Create(
+            bar,
+            TweenInfo.new(SETTINGS.Animations.BounceTime, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out),
+            {Size = UDim2.new(bar.Size.X.Scale, 0, 1.1, 0)}
+        )
+        activeTweens[bounceKey]:Play()
+        activeTweens[bounceKey].Completed:Connect(function()
+            TweenService:Create(
+                bar,
+                TweenInfo.new(SETTINGS.Animations.BounceTime / 2, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+                {Size = UDim2.new(bar.Size.X.Scale, 0, 1, 0)}
+            ):Play()
+        end)
+    end
+
+    local function ResetToNoTarget()
+        print("Resetting TargetHUD to NO TARGET")
+        if not TargetHUD or not PlayerIcon or not Username or not HealthText or not ArmorText or not HealthNumber or not ArmorNumber or not Divider or not TopBar or not HealthFill or not ArmorFill or not HealthPulse or not ArmorPulse or not BloodEffect then return end
+        PlayerIcon.Image = ""
+        PlayerIcon.BackgroundColor3 = SETTINGS.Colors.NoTarget
+        Username.Text = "NO TARGET"
+        Username.TextColor3 = SETTINGS.Colors.NoTarget
+        HealthText.Text = "--"
+        HealthText.TextColor3 = SETTINGS.Colors.NoTarget
+        ArmorText.Text = "--"
+        ArmorText.TextColor3 = SETTINGS.Colors.NoTarget
+        HealthNumber.Text = ""
+        ArmorNumber.Text = ""
+        Divider.BackgroundColor3 = SETTINGS.Colors.NoTarget
+        TopBar.BackgroundColor3 = SETTINGS.Colors.NoTarget
+        CancelTweens()
+        HealthFill.Size = UDim2.new(0, 0, 1, 0)
+        ArmorFill.Size = UDim2.new(0, 0, 1, 0)
+        TweenService:Create(
+            HealthFill,
+            TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Size = UDim2.new(0, 0, 1, 0)}
+        ):Play()
+        TweenService:Create(
+            ArmorFill,
+            TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Size = UDim2.new(0, 0, 1, 0)}
+        ):Play()
+        HealthPulse.Visible = false
+        ArmorPulse.Visible = false
+        BloodEffect.BackgroundTransparency = 1
+        FadeOut()
+        TargetHUD.Visible = false
+        -- Сбрасываем позицию и масштаб
+        TargetHUD.Position = UDim2.new(0.5, 0, 0.15, 0)
+        HUDScale.Scale = 1
+    end
+
+    local function SetHasTarget()
+        print("Setting TargetHUD to target mode")
+        if not TopBar or not Username or not HealthText or not ArmorText or not HealthNumber or not ArmorNumber or not Divider or not PlayerIcon then return end
+        TopBar.BackgroundColor3 = SETTINGS.Colors.Accent
+        Username.TextColor3 = SETTINGS.Colors.TextHighlight
+        HealthText.TextColor3 = SETTINGS.Colors.Health
+        ArmorText.TextColor3 = SETTINGS.Colors.Armor
+        HealthNumber.TextColor3 = SETTINGS.Colors.TextHighlight
+        ArmorNumber.TextColor3 = SETTINGS.Colors.TextHighlight
+        Divider.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+        PlayerIcon.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+        FadeIn()
+        PulseAccent()
+        TargetHUD.Visible = true
+    end
+
+    local lastTarget = nil
+    local lastHealth = -1
+    local lastArmor = -1
+    local updateCooldown = 0.1
+    local lastUpdateTime = 0
+
+    local function UpdateTargetHUD(player)
+        print("Updating TargetHUD for player: ", player and player.Name or "nil")
+        local currentTime = tick()
+        if currentTime - lastUpdateTime < updateCooldown then return end
+        lastUpdateTime = currentTime
+
+        if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+            print("No valid player or character, resetting HUD")
+            if lastTarget then
+                ResetToNoTarget()
+                lastTarget = nil
+                lastHealth = -1
+                lastArmor = -1
+            end
+            return
+        end
+
+        if player ~= lastTarget then
+            Username.Text = string.upper(player.Name)
+            PlayerIcon.Image = GetPlayerAvatar(player.UserId)
+            SetHasTarget()
+            TweenService:Create(
+                Username,
+                TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                {TextSize = 22}
+            ):Play()
+            TweenService:Create(
+                Username,
+                TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+                {TextSize = 20}
+            ):Play()
+        end
+
+        local character = player.Character
+        if character then
+            -- Здоровье
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local health = humanoid and humanoid.Health or 0
+            local maxHealth = humanoid and humanoid.MaxHealth or 100
+            local healthPercent = math.clamp(health / maxHealth, 0, 1)
+
+            if health ~= lastHealth then
+                if lastHealth > -1 and lastHealth > health then
+                    PlayBloodEffect()
+                end
+                HealthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
+                TweenService:Create(
+                    HealthFill,
+                    TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    {Size = UDim2.new(healthPercent, 0, 1, 0)}
+                ):Play()
+                HealthNumber.Text = tostring(math.floor(health))
+                HealthText.Text = tostring(math.floor(health))
+                PlayBounceAnimation(HealthFill, "healthBounce")
+                PlayPulseEffect(HealthPulse, health)
+                lastHealth = health
+            end
+
+            -- Броня
+            local armorValue = GetArmorValue(player)
+            local armorPercent = math.clamp(armorValue / 100, 0, 1)
+
+            if armorValue ~= lastArmor then
+                if lastArmor > -1 and lastArmor > armorValue then
+                    PlayBloodEffect()
+                end
+                ArmorFill.Size = UDim2.new(armorPercent, 0, 1, 0)
+                TweenService:Create(
+                    ArmorFill,
+                    TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    {Size = UDim2.new(armorPercent, 0, 1, 0)}
+                ):Play()
+                ArmorNumber.Text = tostring(math.floor(armorValue))
+                ArmorText.Text = tostring(math.floor(armorValue))
+                PlayBounceAnimation(ArmorFill, "armorBounce")
+                PlayPulseEffect(ArmorPulse, armorValue)
+                lastArmor = armorValue
+            end
+        else
+            CancelTweens()
+            HealthFill.Size = UDim2.new(0, 0, 1, 0)
+            ArmorFill.Size = UDim2.new(0, 0, 1, 0)
+            TweenService:Create(
+                HealthFill,
+                TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                {Size = UDim2.new(0, 0, 1, 0)}
+            ):Play()
+            TweenService:Create(
+                ArmorFill,
+                TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                {Size = UDim2.new(0, 0, 1, 0)}
+            ):Play()
+            HealthNumber.Text = ""
+            ArmorNumber.Text = ""
+            HealthText.Text = "--"
+            ArmorText.Text = "--"
+            HealthPulse.Visible = false
+            ArmorPulse.Visible = false
+            BloodEffect.BackgroundTransparency = 1
+            lastHealth = 0
+            lastArmor = 0
+        end
+
+        lastTarget = player
+    end
+
+    return UpdateTargetHUD, ResetToNoTarget
+end
+
+-- Drag'n'Drop
+local function SetupDragAndDrop()
+    local dragging
+    local dragInput
+    local dragStart
+    local startPos
+
+    local function UpdateDrag(input)
+        local delta = input.Position - dragStart
+        local newPos = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+        TweenService:Create(
+            TargetHUD,
+            TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Position = newPos}
+        ):Play()
+    end
+
+    TargetHUD.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = TargetHUD.Position
+            TweenService:Create(
+                TargetHUD,
+                TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                {Size = UDim2.new(0, SETTINGS.Sizes.Width * SETTINGS.Animations.DragScale, 0, SETTINGS.Sizes.Height * SETTINGS.Animations.DragScale)}
+            ):Play()
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    TweenService:Create(
+                        TargetHUD,
+                        TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                        {Size = UDim2.new(0, SETTINGS.Sizes.Width, 0, SETTINGS.Sizes.Height)}
+                    ):Play()
+                end
+            end)
+        end
+    end)
+
+    TargetHUD.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            UpdateDrag(input)
+        end
+    end)
+end
 
 -- =====================
 --       FUNCTIONS
 -- =====================
 
--- Создание визуализации FOV
+-- Безопасное создание FOV
 local function CreateFOV()
     if not Settings.FOVVisuals.Enabled then return end
-    
-    FOVCircle = Drawing.new("Circle")
-    FOVCircle.Visible = true
-    FOVCircle.Transparency = Settings.FOVVisuals.Transparency
-    FOVCircle.Color = Settings.FOVVisuals.Color
-    FOVCircle.Thickness = Settings.FOVVisuals.Thickness
-    FOVCircle.Filled = Settings.FOVVisuals.Filled
-    FOVCircle.Radius = Settings.Main.FOV
-    FOVCircle.NumSides = 100
-    FOVCircle.Position = Vector2.new(Mouse.X, Mouse.Y + GuiService:GetGuiInset().Y)
+    if FOVCircle then pcall(function() FOVCircle:Remove() end) FOVCircle = nil end
+    local success, err = pcall(function()
+        FOVCircle = Drawing.new("Circle")
+        FOVCircle.Visible = true
+        FOVCircle.Transparency = Settings.FOVVisuals.Transparency
+        FOVCircle.Color = Settings.FOVVisuals.Color
+        FOVCircle.Thickness = Settings.FOVVisuals.Thickness
+        FOVCircle.Filled = Settings.FOVVisuals.Filled
+        FOVCircle.Radius = Settings.Main.FOV
+        FOVCircle.NumSides = 100
+        FOVCircle.Position = Vector2.new(Mouse.X, Mouse.Y + GuiService:GetGuiInset().Y)
+    end)
+    if not success then
+        warn("Failed to create FOV:", err)
+        delay(1, CreateFOV)
+    end
 end
 
--- Обновление позиции FOV
+-- Обновление FOV
 local function UpdateFOV()
-    if not FOVCircle then return end
-    FOVCircle.Position = Vector2.new(Mouse.X, Mouse.Y + GuiService:GetGuiInset().Y)
-    FOVCircle.Radius = Settings.Main.FOV
+    if not FOVCircle then
+        if Settings.FOVVisuals.Enabled then CreateFOV() end
+        return
+    end
+    local pos = Mouse and Vector2.new(Mouse.X, Mouse.Y + GuiService:GetGuiInset().Y) or LastMousePos
+    local success, err = pcall(function()
+        FOVCircle.Position = pos
+        FOVCircle.Radius = Settings.Main.FOV
+        FOVCircle.Visible = Settings.FOVVisuals.Enabled
+    end)
+    if not success then
+        warn("FOV Update Error:", err)
+        CreateFOV()
+    end
 end
 
 -- Создание трассира
 local function CreateTracer()
-    local StartPart = Instance.new("Part")
-    StartPart.Anchored = true
-    StartPart.CanCollide = false
-    StartPart.Transparency = 1
-    StartPart.Parent = Workspace
+    if TracerBeam then pcall(function() TracerBeam:Destroy() end) end
+    if StartAttachment then pcall(function() StartAttachment.Parent:Destroy() end) end
+    if EndAttachment then pcall(function() EndAttachment.Parent:Destroy() end) end
+    local success, err = pcall(function()
+        local StartPart = Instance.new("Part")
+        StartPart.Anchored = true
+        StartPart.CanCollide = false
+        StartPart.Transparency = 1
+        StartPart.Parent = Workspace
 
-    local EndPart = Instance.new("Part")
-    EndPart.Anchored = true
-    EndPart.CanCollide = false
-    EndPart.Transparency = 1
-    EndPart.Parent = Workspace
+        local EndPart = Instance.new("Part")
+        EndPart.Anchored = true
+        EndPart.CanCollide = false
+        EndPart.Transparency = 1
+        EndPart.Parent = Workspace
 
-    StartAttachment = Instance.new("Attachment")
-    StartAttachment.Parent = StartPart
-    EndAttachment = Instance.new("Attachment")
-    EndAttachment.Parent = EndPart
+        StartAttachment = Instance.new("Attachment")
+        StartAttachment.Parent = StartPart
+        EndAttachment = Instance.new("Attachment")
+        EndAttachment.Parent = EndPart
 
-    TracerBeam = Instance.new("Beam")
-    TracerBeam.Attachment0 = StartAttachment
-    TracerBeam.Attachment1 = EndAttachment
-    TracerBeam.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0))
-    TracerBeam.Brightness = 1
-    TracerBeam.Width0 = 0.2
-    TracerBeam.Width1 = 0.2
-    TracerBeam.Enabled = false
-    TracerBeam.Parent = Workspace
+        TracerBeam = Instance.new("Beam")
+        TracerBeam.Attachment0 = StartAttachment
+        TracerBeam.Attachment1 = EndAttachment
+        TracerBeam.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0))
+        TracerBeam.Brightness = 1
+        TracerBeam.Width0 = 0.2
+        TracerBeam.Width1 = 0.2
+        TracerBeam.Enabled = false
+        TracerBeam.Parent = Workspace
+    end)
+    if not success then
+        warn("Failed to create Tracer:", err)
+    end
 end
 
 -- Проверка видимости части тела
 local function IsPartVisible(part)
-    if not part then return false end
-    
+    if not part or not part.Parent then return false end
     local character = part:FindFirstAncestorOfClass("Model")
     if not character then return false end
-    
     local origin = Camera.CFrame.Position
-    local _, onScreen = Camera:WorldToViewportPoint(part.Position)
-    
-    if not onScreen then return false end
-    
+    local direction = (part.Position - origin)
     if Settings.Main.WallCheck then
-        local direction = (part.Position - origin).Unit * (origin - part.Position).Magnitude
         local raycastParams = RaycastParams.new()
         raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, character}
         raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-        
         local raycastResult = Workspace:Raycast(origin, direction, raycastParams)
         if raycastResult then
             local hitPart = raycastResult.Instance
             return hitPart:IsDescendantOf(character)
         end
+        return true
     end
-    
     return true
-end
-
--- Получение лучшей видимой части тела
-local function GetBestVisiblePart(character)
-    if not Settings.Priority.Enabled then
-        return character:FindFirstChild("HumanoidRootPart")
-    end
-    
-    local bestPart, bestPriority = nil, -1
-    
-    -- Сортируем части тела по приоритету
-    local sortedParts = {}
-    for partName, priority in pairs(Settings.Priority.Parts) do
-        table.insert(sortedParts, {Name = partName, Priority = priority})
-    end
-    table.sort(sortedParts, function(a, b) return a.Priority > b.Priority end)
-    
-    -- Ищем лучшую видимую часть
-    for _, partData in ipairs(sortedParts) do
-        local part = character:FindFirstChild(partData.Name)
-        if part and IsPartVisible(part) then
-            return part
-        end
-    end
-    
-    -- Если ничего не найдено, возвращаем HumanoidRootPart (если виден)
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if rootPart and IsPartVisible(rootPart) then
-        return rootPart
-    end
-    
-    return nil
 end
 
 -- Проверка на ragdoll
 local function IsRagdoll(character)
     if not Settings.Main.RagdollCheck then return false end
     local humanoid = character:FindFirstChildOfClass("Humanoid")
-    return humanoid and humanoid.Health <= 0
+    if humanoid then
+        if humanoid.Health <= 0 then return true end
+        if humanoid:GetState() == Enum.HumanoidStateType.Dead then return true end
+        if humanoid.PlatformStand then return true end
+        if humanoid:FindFirstChild("Ragdoll") or character:FindFirstChild("Ragdoll") then return true end
+    else
+        return true
+    end
+    return false
 end
 
--- Поиск ближайшей цели к курсору
+-- Поиск ближайшей цели
 local function GetClosestToMouse()
+    print("Searching for closest target...")
     local closestTarget, closestDistance = nil, Settings.Main.FOV
-    
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
-            -- Проверка на ragdoll
-            if IsRagdoll(player.Character) and not Settings.Main.RagdollAiming then
-                continue
-            end
-            
+            local isRagdoll = IsRagdoll(player.Character)
+            print("Checking player: ", player.Name, " Ragdoll: ", isRagdoll)
+            if isRagdoll and not Settings.Main.RagdollAiming then continue end
             local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
             if rootPart then
                 local position, onScreen = Camera:WorldToScreenPoint(rootPart.Position)
                 if onScreen then
                     local distance = (Vector2.new(position.X, position.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
-                    
+                    print("Player: ", player.Name, " Distance: ", distance, " Visible: ", IsPartVisible(player.Character:FindFirstChild(Settings.TargetPart)))
                     if distance < closestDistance then
-                        -- Проверка видимости (если включено)
-                        if Settings.Main.WallCheck then
-                            local bestPart = GetBestVisiblePart(player.Character)
-                            if bestPart then
-                                closestTarget = player
-                                closestDistance = distance
-                                TargetPart = bestPart
-                            end
-                        else
+                        local targetPart = player.Character:FindFirstChild(Settings.TargetPart)
+                        if targetPart and IsPartVisible(targetPart) then
+                            closestTarget = player
+                            closestDistance = distance
+                            TargetPart = targetPart
+                        elseif not Settings.Main.WallCheck then
                             closestTarget = player
                             closestDistance = distance
                             TargetPart = rootPart
@@ -228,43 +918,110 @@ local function GetClosestToMouse()
             end
         end
     end
-    
+    print("Selected target: ", closestTarget and closestTarget.Name or "none")
     return closestTarget
 end
 
 -- Обновление трассира
 local function UpdateTracer()
-    if TracerBeam and StartAttachment and EndAttachment and Target and Target.Character then
-        -- Динамическое обновление части тела
-        if Settings.Priority.DynamicPart then
-            local newPart = GetBestVisiblePart(Target.Character)
-            if newPart then
-                TargetPart = newPart
-            end
+    if not TracerBeam or not StartAttachment or not EndAttachment then
+        if Settings.FOVVisuals.Enabled then CreateTracer() end
+        return
+    end
+    if Target and Target.Character then
+        local newPart = Target.Character:FindFirstChild(Settings.TargetPart)
+        if newPart and IsPartVisible(newPart) then
+            TargetPart = newPart
+        elseif not TargetPart or not TargetPart.Parent then
+            TargetPart = Target.Character:FindFirstChild("HumanoidRootPart")
         end
-        
         if TargetPart and TargetPart.Parent then
-            -- Обновляем позицию начальной точки
             if Character and Character:FindFirstChild("Head") then
-                StartAttachment.Parent.Position = Character.Head.Position
+                pcall(function()
+                    StartAttachment.Parent.Position = Character.Head.Position
+                end)
             end
-            
-            -- Вычисляем предсказанную точку
             local hit = TargetPart.CFrame.Position
             local velocity = TargetPart.Velocity
             local predictedPosition = hit + velocity * Settings.Main.Prediction
-            
-            -- Обновляем позицию конечной точки
-            EndAttachment.Parent.Position = predictedPosition
-            TracerBeam.Enabled = true
+            pcall(function()
+                EndAttachment.Parent.Position = predictedPosition
+                TracerBeam.Enabled = true
+            end)
             return
         end
     end
-    
-    -- Отключаем трассир, если цель потеряна
-    if TracerBeam then
+    pcall(function()
         TracerBeam.Enabled = false
+    end)
+end
+
+-- Обновление позиции и масштаба TargetHUD
+local function UpdateTargetHUDPosition()
+    if not Target or not Target.Character then return end
+
+    local rootPart = Target.Character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    -- Получаем экранные координаты цели
+    local position, onScreen = Camera:WorldToScreenPoint(rootPart.Position)
+
+    -- Вычисляем расстояние до цели
+    local distance = (Camera.CFrame.Position - rootPart.Position).Magnitude
+    local scale = math.clamp(
+        Settings.TargetHUD.BaseDistance / distance,
+        Settings.TargetHUD.MinScale,
+        Settings.TargetHUD.MaxScale
+    )
+
+    -- Обновляем масштаб через UIScale
+    HUDScale.Scale = scale
+
+    -- Определяем позицию HUD в зависимости от режима
+    local offset = Settings.TargetHUD.Offset
+    local initialOffset = Settings.TargetHUD.InitialOffset -- Применяем начальное смещение
+    local hudPos
+    local anchorPoint = Vector2.new(0.5, 0.5)
+    local scaledWidth = Settings.TargetHUD.BaseSize.X * scale
+    local scaledHeight = Settings.TargetHUD.BaseSize.Y * scale
+
+    if Settings.TargetHUD.Mode == "Top" then
+        hudPos = UDim2.new(
+            0, position.X + initialOffset.X,
+            0, position.Y - scaledHeight - offset + initialOffset.Y
+        )
+        anchorPoint = Vector2.new(0.5, 1)
+    elseif Settings.TargetHUD.Mode == "Bottom" then
+        hudPos = UDim2.new(
+            0, position.X + initialOffset.X,
+            0, position.Y + offset + initialOffset.Y
+        )
+        anchorPoint = Vector2.new(0.5, 0)
+    elseif Settings.TargetHUD.Mode == "Right" then
+        hudPos = UDim2.new(
+            0, position.X + offset + initialOffset.X,
+            0, position.Y + initialOffset.Y
+        )
+        anchorPoint = Vector2.new(0, 0.5)
+    elseif Settings.TargetHUD.Mode == "Left" then
+        hudPos = UDim2.new(
+            0, position.X - scaledWidth - offset + initialOffset.X,
+            0, position.Y + initialOffset.Y
+        )
+        anchorPoint = Vector2.new(1, 0.5)
     end
+
+    -- Применяем позицию и якорь
+    TargetHUD.Position = hudPos
+    TargetHUD.AnchorPoint = anchorPoint
+end
+
+-- Инициализация TargetHUD
+local function InitializeTargetHUD()
+    print("Initializing TargetHUD...")
+    UpdateTargetHUD, ResetToNoTarget = CreateTargetHUD()
+    SetupDragAndDrop()
+    print("TargetHUD initialized successfully.")
 end
 
 -- Обработка выбора цели
@@ -274,15 +1031,25 @@ UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
         if Target == nil then
             Target = GetClosestToMouse()
             if Target then
-                warn("Locked on to: " .. Target.Name .. " (" .. TargetPart.Name .. ")")
+                print("Target selected: ", Target.Name)
+                UpdateTargetHUD(Target)
+                TargetHUD.Visible = true
             else
-                warn("No target found")
+                print("No target found")
             end
         else
-            warn("Unlocked from: " .. Target.Name)
+            print("Target reset")
             Target = nil
             TargetPart = nil
+            ResetToNoTarget()
         end
+    end
+end)
+
+-- Обработка движения мыши
+UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        LastMousePos = Vector2.new(input.Position.X, input.Position.Y + GuiService:GetGuiInset().Y)
     end
 end)
 
@@ -296,33 +1063,44 @@ local function SetupCharacter(char)
                     local hit = TargetPart.CFrame.Position
                     local velocity = TargetPart.Velocity
                     local predictedPosition = hit + velocity * Settings.Main.Prediction
-                    
-                    -- Отправка данных серверу
-                    ReplicatedStorage.MainEvent:FireServer("UpdateMousePos", predictedPosition)
+                    pcall(function()
+                        ReplicatedStorage.MainEvent:FireServer("UpdateMousePos", predictedPosition)
+                    end)
                 end
             end)
         end
     end)
 end
 
--- Инициализация
-CreateFOV()
-CreateTracer()
-
-RunService.RenderStepped:Connect(function()
-    UpdateFOV()
-    UpdateTracer()
-end)
-
-if Character then
-    SetupCharacter(Character)
-end
-LocalPlayer.CharacterAdded:Connect(SetupCharacter)
-
--- Очистка при отключении
-game:GetService("UserInputService").WindowFocusReleased:Connect(function()
-    if FOVCircle then
-        FOVCircle:Remove()
-        FOVCircle = nil
+-- Восстановление FOV
+UserInputService.WindowFocused:Connect(function()
+    if Settings.FOVVisuals.Enabled and not FOVCircle then
+        CreateFOV()
     end
 end)
+
+-- Инициализация
+local function Initialize()
+    InitializeTargetHUD()
+    CreateFOV()
+    CreateTracer()
+    RunService.RenderStepped:Connect(function()
+        UpdateFOV()
+        UpdateTracer()
+        if Target then
+            UpdateTargetHUD(Target)
+            UpdateTargetHUDPosition()
+        end
+    end)
+    if Character then
+        SetupCharacter(Character)
+    end
+    LocalPlayer.CharacterAdded:Connect(SetupCharacter)
+end
+
+-- Запуск
+local success, err = pcall(Initialize)
+if not success then
+    warn("Initialization Error:", err)
+    delay(5, Initialize)
+end
