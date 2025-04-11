@@ -1,0 +1,694 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Настройки стиля
+local SETTINGS = {
+    Colors = {
+        Background = Color3.fromRGB(20, 20, 25),
+        Background2 = Color3.fromRGB(30, 30, 40),
+        Accent = Color3.fromRGB(180, 50, 255),
+        Text = Color3.fromRGB(240, 240, 240),
+        TextHighlight = Color3.fromRGB(255, 255, 255),
+        Health = Color3.fromRGB(255, 80, 80),
+        HealthDark = Color3.fromRGB(200, 50, 50),
+        HealthWarning = Color3.fromRGB(255, 20, 20),
+        Armor = Color3.fromRGB(80, 160, 255),
+        ArmorDark = Color3.fromRGB(50, 120, 200),
+        ArmorWarning = Color3.fromRGB(20, 120, 255),
+        HealthBackground = Color3.fromRGB(50, 20, 25),
+        ArmorBackground = Color3.fromRGB(20, 25, 50),
+        IconBorder = Color3.fromRGB(60, 60, 80),
+        NoTarget = Color3.fromRGB(100, 100, 100),
+        Glow = Color3.fromRGB(180, 50, 255),
+        Pulse = Color3.fromRGB(255, 50, 50),
+        Blood = Color3.fromRGB(200, 0, 0) -- Цвет эффекта крови
+    },
+    Sizes = {
+        Width = 300,
+        Height = 130,
+        IconSize = 80,
+        BarHeight = 8,
+        BarWidth = 190,
+        CornerRadius = 8,
+        Spacing = 15,
+        PulseHeight = 2
+    },
+    Fonts = {
+        Main = Enum.Font.GothamBold,
+        Secondary = Enum.Font.GothamMedium
+    },
+    Animations = {
+        FadeTime = 0.3,
+        BarTweenTime = 0.5,
+        PulseTime = 1.5,
+        DragScale = 0.95,
+        BounceTime = 0.3,
+        PulseMoveTime = 0.8,
+        BloodFlashTime = 0.4 -- Время эффекта крови
+    }
+}
+
+-- Создаем ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CSGOTargetHUD"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.IgnoreGuiInset = true
+
+-- Основной контейнер
+local TargetHUD = Instance.new("Frame")
+TargetHUD.Name = "TargetHUD"
+TargetHUD.Size = UDim2.new(0, SETTINGS.Sizes.Width, 0, SETTINGS.Sizes.Height)
+TargetHUD.AnchorPoint = Vector2.new(0.5, 0)
+TargetHUD.Position = UDim2.new(0.5, 0, 0.15, 0)
+TargetHUD.BackgroundColor3 = SETTINGS.Colors.Background
+TargetHUD.BackgroundTransparency = 0.2
+TargetHUD.BorderSizePixel = 0
+TargetHUD.ZIndex = 10
+TargetHUD.Visible = true
+TargetHUD.Active = true
+TargetHUD.ClipsDescendants = true
+
+local HUDCorner = Instance.new("UICorner")
+HUDCorner.CornerRadius = UDim.new(0, SETTINGS.Sizes.CornerRadius)
+HUDCorner.Parent = TargetHUD
+
+local HUDShadow = Instance.new("ImageLabel")
+HUDShadow.Name = "Shadow"
+HUDShadow.Size = UDim2.new(1, 20, 1, 20)
+HUDShadow.Position = UDim2.new(0, -10, 0, -10)
+HUDShadow.BackgroundTransparency = 1
+HUDShadow.Image = "rbxassetid://1316045217"
+HUDShadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+HUDShadow.ImageTransparency = 0.7
+HUDShadow.ScaleType = Enum.ScaleType.Slice
+HUDShadow.SliceCenter = Rect.new(10, 10, 118, 118)
+HUDShadow.ZIndex = 9
+HUDShadow.Parent = TargetHUD
+
+local BloodEffect = Instance.new("Frame")
+BloodEffect.Name = "BloodEffect"
+BloodEffect.Size = UDim2.new(1, 0, 1, 0)
+BloodEffect.BackgroundColor3 = SETTINGS.Colors.Blood
+BloodEffect.BackgroundTransparency = 1
+BloodEffect.ZIndex = 15
+BloodEffect.BorderSizePixel = 0
+BloodEffect.Parent = TargetHUD
+
+local BloodCorner = Instance.new("UICorner")
+BloodCorner.CornerRadius = UDim.new(0, SETTINGS.Sizes.CornerRadius)
+BloodCorner.Parent = BloodEffect
+
+local TopBar = Instance.new("Frame")
+TopBar.Name = "TopBar"
+TopBar.Size = UDim2.new(1, 0, 0, 4)
+TopBar.BackgroundColor3 = SETTINGS.Colors.NoTarget
+TopBar.BorderSizePixel = 0
+TopBar.ZIndex = 11
+TopBar.Parent = TargetHUD
+
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Name = "ContentFrame"
+ContentFrame.Size = UDim2.new(1, -20, 1, -20)
+ContentFrame.Position = UDim2.new(0, 10, 0, 10)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = TargetHUD
+
+local IconFrame = Instance.new("Frame")
+IconFrame.Name = "IconFrame"
+IconFrame.Size = UDim2.new(0, SETTINGS.Sizes.IconSize, 0, SETTINGS.Sizes.IconSize)
+IconFrame.Position = UDim2.new(0, 0, 0, 0)
+IconFrame.BackgroundTransparency = 1
+IconFrame.Parent = ContentFrame
+
+local IconBorder = Instance.new("Frame")
+IconBorder.Name = "IconBorder"
+IconBorder.Size = UDim2.new(1, 0, 1, 0)
+IconBorder.BackgroundColor3 = SETTINGS.Colors.IconBorder
+IconBorder.Parent = IconFrame
+
+local IconGradient = Instance.new("UIGradient")
+IconGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, SETTINGS.Colors.Accent),
+    ColorSequenceKeypoint.new(1, SETTINGS.Colors.Background2)
+})
+IconGradient.Rotation = 45
+IconGradient.Parent = IconBorder
+
+local IconCorner = Instance.new("UICorner")
+IconCorner.CornerRadius = UDim.new(0, SETTINGS.Sizes.CornerRadius)
+IconCorner.Parent = IconBorder
+
+local PlayerIcon = Instance.new("ImageLabel")
+PlayerIcon.Name = "PlayerIcon"
+PlayerIcon.Size = UDim2.new(1, -6, 1, -6)
+PlayerIcon.Position = UDim2.new(0, 3, 0, 3)
+PlayerIcon.BackgroundColor3 = SETTINGS.Colors.NoTarget
+PlayerIcon.Image = ""
+PlayerIcon.ScaleType = Enum.ScaleType.Crop
+PlayerIcon.ZIndex = 12
+PlayerIcon.Parent = IconBorder
+
+local IconCornerInner = Instance.new("UICorner")
+IconCornerInner.CornerRadius = UDim.new(0, SETTINGS.Sizes.CornerRadius - 2)
+IconCornerInner.Parent = PlayerIcon
+
+local InfoFrame = Instance.new("Frame")
+InfoFrame.Name = "InfoFrame"
+InfoFrame.Size = UDim2.new(1, -SETTINGS.Sizes.IconSize - 15, 1, 0)
+InfoFrame.Position = UDim2.new(0, SETTINGS.Sizes.IconSize + 15, 0, 0)
+InfoFrame.BackgroundTransparency = 1
+InfoFrame.ClipsDescendants = true
+InfoFrame.Parent = ContentFrame
+
+local Username = Instance.new("TextLabel")
+Username.Name = "Username"
+Username.Size = UDim2.new(1, -10, 0, 30)
+Username.Position = UDim2.new(0, 0, 0, 0)
+Username.BackgroundTransparency = 1
+Username.Text = "NO TARGET"
+Username.TextColor3 = SETTINGS.Colors.NoTarget
+Username.TextSize = 20
+Username.Font = SETTINGS.Fonts.Main
+Username.TextXAlignment = Enum.TextXAlignment.Left
+Username.TextStrokeTransparency = 0.7
+Username.TextStrokeColor3 = Color3.fromRGB(10, 10, 20)
+Username.ZIndex = 12
+Username.Parent = InfoFrame
+
+local HealthBar = Instance.new("Frame")
+HealthBar.Name = "HealthBar"
+HealthBar.Size = UDim2.new(0, SETTINGS.Sizes.BarWidth, 0, SETTINGS.Sizes.BarHeight)
+HealthBar.Position = UDim2.new(0, 0, 0, 40)
+HealthBar.BackgroundColor3 = SETTINGS.Colors.HealthBackground
+HealthBar.BorderSizePixel = 0
+HealthBar.ZIndex = 11
+HealthBar.Parent = InfoFrame
+
+local HealthCorner = Instance.new("UICorner")
+HealthCorner.CornerRadius = UDim.new(0, 4)
+HealthCorner.Parent = HealthBar
+
+local HealthFill = Instance.new("Frame")
+HealthFill.Name = "HealthFill"
+HealthFill.Size = UDim2.new(0, 0, 1, 0)
+HealthFill.BackgroundColor3 = SETTINGS.Colors.Health
+HealthFill.BorderSizePixel = 0
+HealthFill.ZIndex = 12
+HealthFill.Parent = HealthBar
+
+local HealthFillGradient = Instance.new("UIGradient")
+HealthFillGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, SETTINGS.Colors.Health),
+    ColorSequenceKeypoint.new(1, SETTINGS.Colors.HealthDark)
+})
+HealthFillGradient.Rotation = 0
+HealthFillGradient.Parent = HealthFill
+
+local HealthFillCorner = Instance.new("UICorner")
+HealthFillCorner.CornerRadius = UDim.new(0, 4)
+HealthFillCorner.Parent = HealthFill
+
+local HealthPulse = Instance.new("Frame")
+HealthPulse.Name = "HealthPulse"
+HealthPulse.Size = UDim2.new(0, 20, 0, SETTINGS.Sizes.PulseHeight)
+HealthPulse.Position = UDim2.new(0, 0, 0.5, -SETTINGS.Sizes.PulseHeight / 2)
+HealthPulse.BackgroundColor3 = SETTINGS.Colors.Pulse
+HealthPulse.BorderSizePixel = 0
+HealthPulse.ZIndex = 13
+HealthPulse.Visible = false
+HealthPulse.Parent = HealthBar
+
+local HealthText = Instance.new("TextLabel")
+HealthText.Name = "HealthText"
+HealthText.Size = UDim2.new(0, 60, 0, 20)
+HealthText.Position = UDim2.new(0, SETTINGS.Sizes.BarWidth + 10, 0, 37)
+HealthText.BackgroundTransparency = 1
+HealthText.Text = "-- HP"
+HealthText.TextColor3 = SETTINGS.Colors.NoTarget
+HealthText.TextSize = 14
+HealthText.Font = SETTINGS.Fonts.Secondary
+HealthText.TextXAlignment = Enum.TextXAlignment.Left
+HealthText.ZIndex = 12
+HealthText.Parent = InfoFrame
+
+local ArmorBar = Instance.new("Frame")
+ArmorBar.Name = "ArmorBar"
+ArmorBar.Size = UDim2.new(0, SETTINGS.Sizes.BarWidth, 0, SETTINGS.Sizes.BarHeight)
+ArmorBar.Position = UDim2.new(0, 0, 0, 52)
+ArmorBar.BackgroundColor3 = SETTINGS.Colors.ArmorBackground
+ArmorBar.BorderSizePixel = 0
+ArmorBar.ZIndex = 11
+ArmorBar.Parent = InfoFrame
+
+local ArmorCorner = Instance.new("UICorner")
+ArmorCorner.CornerRadius = UDim.new(0, 4)
+ArmorCorner.Parent = ArmorBar
+
+local ArmorFill = Instance.new("Frame")
+ArmorFill.Name = "ArmorFill"
+ArmorFill.Size = UDim2.new(0, 0, 1, 0)
+ArmorFill.BackgroundColor3 = SETTINGS.Colors.Armor
+ArmorFill.BorderSizePixel = 0
+ArmorFill.ZIndex = 12
+ArmorFill.Parent = ArmorBar
+
+local ArmorFillGradient = Instance.new("UIGradient")
+ArmorFillGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, SETTINGS.Colors.Armor),
+    ColorSequenceKeypoint.new(1, SETTINGS.Colors.ArmorDark)
+})
+ArmorFillGradient.Rotation = 0
+ArmorFillGradient.Parent = ArmorFill
+
+local ArmorFillCorner = Instance.new("UICorner")
+ArmorFillCorner.CornerRadius = UDim.new(0, 4)
+ArmorFillCorner.Parent = ArmorFill
+
+local ArmorPulse = Instance.new("Frame")
+ArmorPulse.Name = "ArmorPulse"
+ArmorPulse.Size = UDim2.new(0, 20, 0, SETTINGS.Sizes.PulseHeight)
+ArmorPulse.Position = UDim2.new(0, 0, 0.5, -SETTINGS.Sizes.PulseHeight / 2)
+ArmorPulse.BackgroundColor3 = SETTINGS.Colors.Pulse
+ArmorPulse.BorderSizePixel = 0
+ArmorPulse.ZIndex = 13
+ArmorPulse.Visible = false
+ArmorPulse.Parent = ArmorBar
+
+local ArmorText = Instance.new("TextLabel")
+ArmorText.Name = "ArmorText"
+ArmorText.Size = UDim2.new(0, 80, 0, 20)
+ArmorText.Position = UDim2.new(0, SETTINGS.Sizes.BarWidth + 10, 0, 49)
+ArmorText.BackgroundTransparency = 1
+ArmorText.Text = "-- ARMOR"
+ArmorText.TextColor3 = SETTINGS.Colors.NoTarget
+ArmorText.TextSize = 14
+ArmorText.Font = SETTINGS.Fonts.Secondary
+ArmorText.TextXAlignment = Enum.TextXAlignment.Left
+ArmorText.ZIndex = 12
+ArmorText.Parent = InfoFrame
+
+local Divider = Instance.new("Frame")
+Divider.Name = "Divider"
+Divider.Size = UDim2.new(0, 2, 0, 36)
+Divider.Position = UDim2.new(0, SETTINGS.Sizes.BarWidth + 5, 0, 40)
+Divider.BackgroundColor3 = SETTINGS.Colors.NoTarget
+Divider.BorderSizePixel = 0
+Divider.ZIndex = 11
+Divider.Parent = InfoFrame
+
+-- Функции
+local function GetPlayerAvatar(userId)
+    return string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=420&height=420&format=png", userId)
+end
+
+local function GetPlayerUnderCursor()
+    local mousePos = UserInputService:GetMouseLocation()
+    local camera = workspace.CurrentCamera
+    if not camera then return nil end
+    local ray = camera:ViewportPointToRay(mousePos.X, mousePos.Y)
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterDescendantsInstances = {LocalPlayer.Character or {}}
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    
+    local raycastResult = workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
+    
+    if raycastResult and raycastResult.Instance then
+        local character = raycastResult.Instance:FindFirstAncestorOfClass("Model")
+        if character then
+            return Players:GetPlayerFromCharacter(character)
+        end
+    end
+    return nil
+end
+
+local function GetArmorValue(player)
+    if not player or not player.Character then return 0 end
+    
+    local success, armorValue = pcall(function()
+        local playerFolder = workspace:FindFirstChild("Players")
+        if not playerFolder then return 0 end
+        
+        local playerData = playerFolder:FindFirstChild(player.Name)
+        if not playerData then return 0 end
+        
+        local bodyEffects = playerData:FindFirstChild("BodyEffects")
+        if not bodyEffects then return 0 end
+        
+        local armor = bodyEffects:FindFirstChild("Armor")
+        if not armor then return 0 end
+        
+        return tonumber(armor.Value) or 0
+    end)
+    
+    return success and armorValue or 0
+end
+
+local function FadeIn()
+    TweenService:Create(
+        TargetHUD,
+        TweenInfo.new(SETTINGS.Animations.FadeTime, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+        {BackgroundTransparency = 0.2}
+    ):Play()
+    TweenService:Create(
+        HUDShadow,
+        TweenInfo.new(SETTINGS.Animations.FadeTime, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+        {ImageTransparency = 0.7}
+    ):Play()
+end
+
+local function FadeOut()
+    TweenService:Create(
+        TargetHUD,
+        TweenInfo.new(SETTINGS.Animations.FadeTime, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+        {BackgroundTransparency = 0.5}
+    ):Play()
+    TweenService:Create(
+        HUDShadow,
+        TweenInfo.new(SETTINGS.Animations.FadeTime, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+        {ImageTransparency = 0.9}
+    ):Play()
+end
+
+local function PulseAccent()
+    local pulse = TweenService:Create(
+        TopBar,
+        TweenInfo.new(SETTINGS.Animations.PulseTime, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+        {BackgroundColor3 = SETTINGS.Colors.Accent}
+    )
+    pulse:Play()
+    pulse.Completed:Connect(function()
+        TweenService:Create(
+            TopBar,
+            TweenInfo.new(SETTINGS.Animations.PulseTime, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+            {BackgroundColor3 = Color3.fromRGB(SETTINGS.Colors.Accent.R * 255 * 0.7, SETTINGS.Colors.Accent.G * 255 * 0.7, SETTINGS.Colors.Accent.B * 255 * 0.7)}
+        ):Play()
+    end)
+end
+
+-- Анимации
+local activeTweens = {
+    bloodFlash = nil,
+    healthPulse = nil,
+    armorPulse = nil,
+    healthBounce = nil,
+    armorBounce = nil
+}
+
+local function CancelTweens()
+    for _, tween in pairs(activeTweens) do
+        if tween then
+            tween:Cancel()
+        end
+    end
+    activeTweens.bloodFlash = nil
+    activeTweens.healthPulse = nil
+    activeTweens.armorPulse = nil
+    activeTweens.healthBounce = nil
+    activeTweens.armorBounce = nil
+end
+
+local function PlayBloodEffect()
+    if activeTweens.bloodFlash then activeTweens.bloodFlash:Cancel() end
+    
+    -- Появление эффекта крови
+    BloodEffect.BackgroundTransparency = 0.6
+    activeTweens.bloodFlash = TweenService:Create(
+        BloodEffect,
+        TweenInfo.new(SETTINGS.Animations.BloodFlashTime, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+        {BackgroundTransparency = 1}
+    )
+    activeTweens.bloodFlash:Play()
+end
+
+local function PlayPulseEffect(pulseBar, value)
+    local pulseKey = (pulseBar == HealthPulse) and "healthPulse" or "armorPulse"
+    if activeTweens[pulseKey] then activeTweens[pulseKey]:Cancel() end
+
+    if value > 0 and value < 40 then
+        pulseBar.Visible = true
+        activeTweens[pulseKey] = TweenService:Create(
+            pulseBar,
+            TweenInfo.new(SETTINGS.Animations.PulseMoveTime, Enum.EasingStyle.Sine, Enum.EasingDirection.Out, -1),
+            {Position = UDim2.new(1, -20, 0.5, -SETTINGS.Sizes.PulseHeight / 2)}
+        )
+        activeTweens[pulseKey]:Play()
+    else
+        pulseBar.Visible = false
+        pulseBar.Position = UDim2.new(0, 0, 0.5, -SETTINGS.Sizes.PulseHeight / 2)
+    end
+end
+
+local function PlayBounceAnimation(bar, bounceKey)
+    if activeTweens[bounceKey] then activeTweens[bounceKey]:Cancel() end
+    activeTweens[bounceKey] = TweenService:Create(
+        bar,
+        TweenInfo.new(SETTINGS.Animations.BounceTime, Enum.EasingStyle.Bounce, Enum.EasingDirection.Out),
+        {Size = UDim2.new(bar.Size.X.Scale, 0, 1.1, 0)}
+    )
+    activeTweens[bounceKey]:Play()
+    activeTweens[bounceKey].Completed:Connect(function()
+        TweenService:Create(
+            bar,
+            TweenInfo.new(SETTINGS.Animations.BounceTime / 2, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+            {Size = UDim2.new(bar.Size.X.Scale, 0, 1, 0)}
+        ):Play()
+    end)
+end
+
+local function ResetToNoTarget()
+    PlayerIcon.Image = ""
+    PlayerIcon.BackgroundColor3 = SETTINGS.Colors.NoTarget
+    Username.Text = "NO TARGET"
+    Username.TextColor3 = SETTINGS.Colors.NoTarget
+    HealthText.Text = "-- HP"
+    HealthText.TextColor3 = SETTINGS.Colors.NoTarget
+    ArmorText.Text = "-- ARMOR"
+    ArmorText.TextColor3 = SETTINGS.Colors.NoTarget
+    Divider.BackgroundColor3 = SETTINGS.Colors.NoTarget
+    TopBar.BackgroundColor3 = SETTINGS.Colors.NoTarget
+    
+    CancelTweens()
+    
+    HealthFill.Size = UDim2.new(0, 0, 1, 0)
+    ArmorFill.Size = UDim2.new(0, 0, 1, 0)
+    
+    TweenService:Create(
+        HealthFill,
+        TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Size = UDim2.new(0, 0, 1, 0)}
+    ):Play()
+    TweenService:Create(
+        ArmorFill,
+        TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Size = UDim2.new(0, 0, 1, 0)}
+    ):Play()
+    
+    HealthPulse.Visible = false
+    ArmorPulse.Visible = false
+    BloodEffect.BackgroundTransparency = 1
+    
+    FadeOut()
+end
+
+local function SetHasTarget()
+    TopBar.BackgroundColor3 = SETTINGS.Colors.Accent
+    Username.TextColor3 = SETTINGS.Colors.TextHighlight
+    HealthText.TextColor3 = SETTINGS.Colors.Health
+    ArmorText.TextColor3 = SETTINGS.Colors.Armor
+    Divider.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+    PlayerIcon.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    
+    FadeIn()
+    PulseAccent()
+end
+
+local lastTarget = nil
+local lastHealth = -1
+local lastArmor = -1
+local updateCooldown = 0.1
+local lastUpdateTime = 0
+
+local function UpdateTargetHUD(player)
+    local currentTime = tick()
+    if currentTime - lastUpdateTime < updateCooldown then
+        return
+    end
+    lastUpdateTime = currentTime
+
+    if not player then
+        if lastTarget then
+            ResetToNoTarget()
+            lastTarget = nil
+            lastHealth = -1
+            lastArmor = -1
+        end
+        return
+    end
+    
+    if player ~= lastTarget then
+        Username.Text = string.upper(player.Name)
+        PlayerIcon.Image = GetPlayerAvatar(player.UserId)
+        SetHasTarget()
+        
+        TweenService:Create(
+            Username,
+            TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+            {TextSize = 22}
+        ):Play()
+        TweenService:Create(
+            Username,
+            TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+            {TextSize = 20}
+        ):Play()
+    end
+    
+    local character = player.Character
+    if character then
+        -- Здоровье
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local health = humanoid and humanoid.Health or 0
+        local maxHealth = humanoid and humanoid.MaxHealth or 100
+        local healthPercent = math.clamp(health / maxHealth, 0, 1)
+        
+        if health ~= lastHealth then
+            if lastHealth > -1 and lastHealth > health then
+                PlayBloodEffect()
+            end
+            HealthFill.Size = UDim2.new(healthPercent, 0, 1, 0)
+            TweenService:Create(
+                HealthFill,
+                TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                {Size = UDim2.new(healthPercent, 0, 1, 0)}
+            ):Play()
+            HealthText.Text = string.format("%d HP", math.floor(health))
+            PlayBounceAnimation(HealthFill, "healthBounce")
+            PlayPulseEffect(HealthPulse, health)
+            lastHealth = health
+        end
+        
+        -- Броня
+        local armorValue = GetArmorValue(player)
+        local armorPercent = math.clamp(armorValue / 100, 0, 1)
+        
+        if armorValue ~= lastArmor then
+            if lastArmor > -1 and lastArmor > armorValue then
+                PlayBloodEffect()
+            end
+            ArmorFill.Size = UDim2.new(armorPercent, 0, 1, 0)
+            TweenService:Create(
+                ArmorFill,
+                TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                {Size = UDim2.new(armorPercent, 0, 1, 0)}
+            ):Play()
+            ArmorText.Text = string.format("%d ARMOR", math.floor(armorValue))
+            PlayBounceAnimation(ArmorFill, "armorBounce")
+            PlayPulseEffect(ArmorPulse, armorValue)
+            lastArmor = armorValue
+        end
+    else
+        CancelTweens()
+        
+        HealthFill.Size = UDim2.new(0, 0, 1, 0)
+        ArmorFill.Size = UDim2.new(0, 0, 1, 0)
+        
+        TweenService:Create(
+            HealthFill,
+            TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Size = UDim2.new(0, 0, 1, 0)}
+        ):Play()
+        TweenService:Create(
+            ArmorFill,
+            TweenInfo.new(SETTINGS.Animations.BarTweenTime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Size = UDim2.new(0, 0, 1, 0)}
+        ):Play()
+        
+        HealthText.Text = "0 HP"
+        ArmorText.Text = "0 ARMOR"
+        
+        HealthPulse.Visible = false
+        ArmorPulse.Visible = false
+        BloodEffect.BackgroundTransparency = 1
+        
+        lastHealth = 0
+        lastArmor = 0
+    end
+    
+    lastTarget = player
+end
+
+-- Drag'n'Drop
+local dragging
+local dragInput
+local dragStart
+local startPos
+
+local function UpdateDrag(input)
+    local delta = input.Position - dragStart
+    local newPos = UDim2.new(
+        startPos.X.Scale,
+        startPos.X.Offset + delta.X,
+        startPos.Y.Scale,
+        startPos.Y.Offset + delta.Y
+    )
+    
+    TweenService:Create(
+        TargetHUD,
+        TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Position = newPos}
+    ):Play()
+end
+
+TargetHUD.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = TargetHUD.Position
+        
+        TweenService:Create(
+            TargetHUD,
+            TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Size = UDim2.new(0, SETTINGS.Sizes.Width * SETTINGS.Animations.DragScale, 0, SETTINGS.Sizes.Height * SETTINGS.Animations.DragScale)}
+        ):Play()
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+                
+                TweenService:Create(
+                    TargetHUD,
+                    TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                    {Size = UDim2.new(0, SETTINGS.Sizes.Width, 0, SETTINGS.Sizes.Height)}
+                ):Play()
+            end
+        end)
+    end
+end)
+
+TargetHUD.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        UpdateDrag(input)
+    end
+end)
+
+-- Основной цикл
+RunService.Heartbeat:Connect(function()
+    local targetPlayer = GetPlayerUnderCursor()
+    UpdateTargetHUD(targetPlayer)
+end)
+
+-- Инициализация
+ResetToNoTarget()
+
+ScreenGui.Parent = PlayerGui
+TargetHUD.Parent = ScreenGui
