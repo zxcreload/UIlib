@@ -72,7 +72,7 @@ local Settings = {
         },
         Drag = {
             Sensitivity = 2.00,
-            Smoothness = 0.03
+            Smoothness = 0.015
         },
         DamageParticles = {
             Color = Color3.fromRGB(255, 50, 50),
@@ -85,8 +85,304 @@ local Settings = {
             Speed = NumberRange.new(2, 4),
             SpreadAngle = Vector2.new(-60, 60)
         }
+    },
+
+    -- Настройки Console Logger
+    ConsoleLogger = {
+        EnabledOnStart = true,  -- Показывать консоль при запуске
+        LogTypes = {
+            Hitlog = true,  -- Логировать попадания по цели
+            LocalPlayerDamageLog = true,  -- Логировать урон локального игрока
+            LocalPlayerArmorLog = true,  -- Логировать снижение брони локального игрока
+            TargetHookedLog = true  -- Логировать выбор/снятие цели
+        }
     }
 }
+
+-- Код консоли TitanCX (вставлен как модуль)
+local ConsoleModule = (function()
+    -- Roblox API
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    local UserInputService = game:GetService("UserInputService")
+
+    -- Создаем ScreenGui для консоли
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "TitanCX"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = PlayerGui
+
+    -- Основной фрейм консоли (в стиле Windows 10)
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0, 300, 0, 200)
+    mainFrame.Position = UDim2.new(0, 50, 0, 50)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 73) -- Светлый серый фон
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = screenGui
+
+    -- Тень для эффекта "поднятия"
+    local shadow = Instance.new("ImageLabel")
+    shadow.Size = UDim2.new(1, 20, 1, 20)
+    shadow.Position = UDim2.new(0, -10, 0, -10)
+    shadow.BackgroundTransparency = 1
+    shadow.Image = "rbxassetid://1316045217" -- Тень Roblox
+    shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.ImageTransparency = 0.5
+    shadow.ScaleType = Enum.ScaleType.Slice
+    shadow.SliceCenter = Rect.new(10, 10, 10, 10)
+    shadow.Parent = mainFrame
+
+    -- Заголовочная панель (Title Bar) как один объект
+    local titleBar = Instance.new("Frame")
+    titleBar.Size = UDim2.new(1, 0, 0, 30)
+    titleBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- Базовый цвет (будет перекрыт градиентом)
+    titleBar.BorderSizePixel = 0
+    titleBar.Parent = mainFrame
+
+    -- Закругление всех углов
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0, 10) -- Закругление на всех углах
+    uiCorner.Parent = titleBar
+
+    -- Линеарный градиент (желтый -> розовый)
+    local uiGradient = Instance.new("UIGradient")
+    uiGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 215, 0)), -- Желтый
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 105, 180)) -- Розовый
+    })
+    uiGradient.Rotation = 90
+    uiGradient.Parent = titleBar
+
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+    titleLabel.Position = UDim2.new(0, 10, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Text = "TitanCX console"
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.TextSize = 14
+    titleLabel.Font = Enum.Font.Gotham
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.TextYAlignment = Enum.TextYAlignment.Center
+    titleLabel.Parent = titleBar
+
+    -- Кнопки управления окном (развернуть/восстановить, закрыть)
+    local buttonSize = UDim2.new(0, 45, 0, 30)
+
+    local maximizeButton = Instance.new("TextButton")
+    maximizeButton.Size = buttonSize
+    maximizeButton.Position = UDim2.new(1, -90, 0, 0)
+    maximizeButton.BackgroundTransparency = 1
+    maximizeButton.Text = "" -- Убираем текст
+    maximizeButton.Parent = titleBar
+
+    -- Иконка для maximizeButton (увеличение/уменьшение)
+    local maximizeIcon = Instance.new("ImageLabel")
+    maximizeIcon.Size = UDim2.new(0, 20, 0, 20)
+    maximizeIcon.Position = UDim2.new(0.5, -10, 0.5, -10) -- Центрируем иконку
+    maximizeIcon.BackgroundTransparency = 1
+    maximizeIcon.Image = "rbxassetid://81207376475342" -- Иконка увеличения
+    maximizeIcon.Parent = maximizeButton
+
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = buttonSize
+    closeButton.Position = UDim2.new(1, -45, 0, 0)
+    closeButton.BackgroundTransparency = 1
+    closeButton.Text = "" -- Убираем текст
+    closeButton.Parent = titleBar
+
+    -- Иконка для closeButton (закрытие)
+    local closeIcon = Instance.new("ImageLabel")
+    closeIcon.Size = UDim2.new(0, 20, 0, 20)
+    closeIcon.Position = UDim2.new(0.5, -10, 0.5, -10) -- Центрируем иконку
+    closeIcon.BackgroundTransparency = 1
+    closeIcon.Image = "rbxassetid://100234668796385" -- Иконка закрытия
+    closeIcon.Parent = closeButton
+
+    -- Текстовое поле для логов
+    local logList = Instance.new("ScrollingFrame")
+    logList.Size = UDim2.new(1, -10, 1, -55)
+    logList.Position = UDim2.new(0, 5, 0, 35)
+    logList.BackgroundTransparency = 1
+    logList.ScrollBarThickness = 4
+    logList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    logList.Parent = mainFrame
+
+    local logLayout = Instance.new("UIListLayout")
+    logLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    logLayout.Parent = logList
+
+    -- Нижняя панель с версией
+    local footer = Instance.new("Frame")
+    footer.Size = UDim2.new(1, 0, 0, 20)
+    footer.Position = UDim2.new(0, 0, 1, -20)
+    footer.BackgroundColor3 = Color3.fromRGB(90, 90, 97)
+    footer.BorderSizePixel = 0
+    footer.Parent = mainFrame
+
+    local versionLabel = Instance.new("TextLabel")
+    versionLabel.Size = UDim2.new(1, 0, 1, 0)
+    versionLabel.BackgroundTransparency = 1
+    versionLabel.Text = "cursed by 32vision"
+    versionLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    versionLabel.TextSize = 14
+    versionLabel.Font = Enum.Font.Gotham
+    versionLabel.Parent = footer
+
+    -- Функция для добавления логов с переносом текста (ИЗМЕНЕНО: Поддержка RichText и автопрокрутка)
+    local function addLog(message)
+        local logEntry = Instance.new("TextLabel")
+        logEntry.Size = UDim2.new(1, 0, 0, 20)
+        logEntry.BackgroundTransparency = 1
+        logEntry.RichText = true -- НОВОЕ: Включение RichText для цветного текста
+        logEntry.Text = message
+        logEntry.TextColor3 = Color3.fromRGB(255, 255, 255)
+        logEntry.TextSize = 14
+        logEntry.Font = Enum.Font.GothamBold
+        logEntry.TextXAlignment = Enum.TextXAlignment.Left
+        logEntry.TextWrapped = true
+        logEntry.Parent = logList
+
+        local textBounds = logEntry.TextBounds
+        local lines = math.ceil(textBounds.X / (logList.AbsoluteSize.X - 10))
+        logEntry.Size = UDim2.new(1, 0, 0, math.max(20, lines * 20))
+
+        logList.CanvasSize = UDim2.new(0, 0, 0, logLayout.AbsoluteContentSize.Y)
+        -- НОВОЕ: Автоматическая прокрутка вниз
+        logList.CanvasPosition = Vector2.new(0, logLayout.AbsoluteContentSize.Y)
+    end
+
+    -- Drag-and-drop (за заголовочную панель) с использованием UserInputService
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+
+    -- Изменение размера через правый нижний угол основного фрейма
+    local resizing = false
+    local resizeStart = nil
+    local startSize = nil
+
+    local resizeArea = Instance.new("TextButton")
+    resizeArea.Size = UDim2.new(0, 20, 0, 20)
+    resizeArea.Position = UDim2.new(1, -20, 1, -20)
+    resizeArea.BackgroundTransparency = 1
+    resizeArea.Text = ""
+    resizeArea.Parent = mainFrame
+
+    local resizeIndicator = Instance.new("ImageLabel")
+    resizeIndicator.Size = UDim2.new(0, 20, 0, 20)
+    resizeIndicator.Position = UDim2.new(1, -20, 1, -20)
+    resizeIndicator.BackgroundTransparency = 1
+    resizeIndicator.Image = "rbxassetid://6014261993"
+    resizeIndicator.ImageColor3 = Color3.fromRGB(200, 200, 200)
+    resizeIndicator.Parent = mainFrame
+
+    resizeArea.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            resizing = true
+            resizeStart = input.Position
+            startSize = mainFrame.Size
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement and resizing then
+            local delta = input.Position - resizeStart
+            local newWidth = math.max(200, startSize.X.Offset + delta.X)
+            local newHeight = math.max(150, startSize.Y.Offset + delta.Y)
+            mainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
+
+            for _, logEntry in pairs(logList:GetChildren()) do
+                if logEntry:IsA("TextLabel") then
+                    local textBounds = logEntry.TextBounds
+                    local lines = math.ceil(textBounds.X / (logList.AbsoluteSize.X - 10))
+                    logEntry.Size = UDim2.new(1, 0, 0, math.max(20, lines * 20))
+                end
+            end
+            logList.CanvasSize = UDim2.new(0, 0, 0, logLayout.AbsoluteContentSize.Y)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            resizing = false
+        end
+    end)
+
+    -- Логика для кнопок управления окном
+    local isMaximized = false
+    local normalSize = mainFrame.Size
+    local normalPosition = mainFrame.Position
+
+    maximizeButton.MouseButton1Click:Connect(function()
+        if isMaximized then
+            -- Восстановить
+            mainFrame.Size = normalSize
+            mainFrame.Position = normalPosition
+            maximizeIcon.Image = "rbxassetid://81207376475342" -- Иконка увеличения
+            isMaximized = false
+        else
+            -- Развернуть
+            normalSize = mainFrame.Size
+            normalPosition = mainFrame.Position
+            mainFrame.Size = UDim2.new(1, 0, 1, 0)
+            mainFrame.Position = UDim2.new(0, 0, 0, 0)
+            maximizeIcon.Image = "rbxassetid://84930406585654" -- Иконка уменьшения
+            isMaximized = true
+        end
+    end)
+
+    closeButton.MouseButton1Click:Connect(function()
+        mainFrame.Visible = false
+    end)
+
+    -- Эффекты при наведении на кнопки
+    local function applyHoverEffect(button, hoverColor)
+        button.MouseEnter:Connect(function()
+            button.BackgroundColor3 = hoverColor
+            button.BackgroundTransparency = 0
+        end)
+        button.MouseLeave:Connect(function()
+            button.BackgroundTransparency = 1
+        end)
+    end
+
+    applyHoverEffect(maximizeButton, Color3.fromRGB(0, 100, 195))
+    applyHoverEffect(closeButton, Color3.fromRGB(232, 17, 35))
+
+    return {
+        addLog = addLog,
+        setVisible = function(visible)
+            mainFrame.Visible = visible
+        end
+    }
+end)()
 
 -- SERVICES
 local UserInputService = game:GetService("UserInputService")
@@ -109,6 +405,13 @@ local ParticleEmitter = nil  -- Эффекты на конце трейсера
 local TargetAirTime = 0  -- Время, проведенное целью в воздухе
 local TargetStatus = "Ground"  -- Статус цели: "Ground", "Jumped", "Fly"
 local TargetStatsUI = nil  -- Переменная для хранения UI TargetStats
+local Console = ConsoleModule  -- Ссылка на консоль
+local LastLocalHealth = nil  -- Для отслеживания здоровья локального игрока
+local LastLocalArmor = nil  -- Для отслеживания брони локального игрока
+local TargetHealthConnection = nil  -- НОВОЕ: Подписка на здоровье цели
+local TargetArmorConnection = nil  -- НОВОЕ: Подписка на броню цели
+local LastTargetHealth = nil  -- НОВОЕ: Для отслеживания здоровья цели
+local LastTargetArmor = nil  -- НОВОЕ: Для отслеживания брони цели
 
 -- Инициализация 3D-трейсера
 local function InitializeTracer()
@@ -162,10 +465,19 @@ local function GetTargetInfo(player)
     if not humanoid or not rootPart then
         return nil
     end
+    local armor = 0
+    local armorObject = workspace:FindFirstChild("Players") and
+                       workspace.Players:FindFirstChild(player.Name) and
+                       workspace.Players[player.Name]:FindFirstChild("BodyEffects") and
+                       workspace.Players[player.Name].BodyEffects:FindFirstChild("Armor")
+    if armorObject then
+        armor = armorObject.Value
+    end
     return {
         Name = player.Name,
         Health = humanoid.Health,
         MaxHealth = humanoid.MaxHealth,
+        Armor = armor,
         Position = rootPart.Position,
         Distance = (rootPart.Position - (Character and Character.HumanoidRootPart and Character.HumanoidRootPart.Position or Vector3.new())).Magnitude,
         Status = TargetStatus
@@ -176,10 +488,11 @@ end
 local function LogTargetInfo(targetInfo)
     if targetInfo then
         print(string.format(
-            "Target: %s | Health: %.1f/%.1f | Distance: %.2f studs | Position: (%.2f, %.2f, %.2f) | Status: %s",
+            "Target: %s | Health: %.1f/%.1f | Armor: %.1f | Distance: %.2f studs | Position: (%.2f, %.2f, %.2f) | Status: %s",
             targetInfo.Name,
             targetInfo.Health,
             targetInfo.MaxHealth,
+            targetInfo.Armor,
             targetInfo.Distance,
             targetInfo.Position.X,
             targetInfo.Position.Y,
@@ -413,13 +726,14 @@ local function InitializeTargetStats()
     stats.ArmorText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     stats.ArmorText.Parent = armorFrame
 
-    -- Текстовая метка для имени
+    -- Текстовая метка для имени (ИЗМЕНЕНО: Увеличен размер и смещена ниже)
     stats.NameLabel = Instance.new("TextLabel")
-    stats.NameLabel.Size = UDim2.new(0.65, 0, 0.15, 0)
-    stats.NameLabel.Position = UDim2.new(0.3, 5, 0.05, 0)
+    stats.NameLabel.Size = UDim2.new(0.65, 0, 0.2, 0) -- НОВОЕ: Увеличена высота с 0.15 до 0.2
+    stats.NameLabel.Position = UDim2.new(0.3, 5, 0.1, 0) -- НОВОЕ: Смещена ниже с 0.05 до 0.1
     stats.NameLabel.BackgroundTransparency = 1
     stats.NameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     stats.NameLabel.TextScaled = true
+    stats.NameLabel.TextSize = 20 -- НОВОЕ: Явно задан TextSize для большего текста
     stats.NameLabel.Font = Enum.Font.GothamBlack
     stats.NameLabel.Text = "No Target"
     stats.NameLabel.TextStrokeTransparency = 0.5
@@ -563,75 +877,6 @@ local function InitializeTargetStats()
             -- Обновление аватара
             local userId = target.UserId
             self.AvatarImage.Image = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=150&height=150&format=png", userId)
-
-            -- Подписка на события изменения здоровья и брони, если еще не подписаны
-            if not self.HealthConnection and humanoid then
-                self.HealthConnection = humanoid.HealthChanged:Connect(function(newHealth)
-                    local healthFraction = newHealth / humanoid.MaxHealth
-                    if self.Tweens["Health"] then
-                        self.Tweens["Health"]:Cancel()
-                    end
-                    local healthTween = TweenService:Create(
-                        self.HealthBar,
-                        tweenInfo,
-                        {Size = UDim2.new(math.clamp(healthFraction, 0, 1), 0, 1, 0)}
-                    )
-                    healthTween:Play()
-                    self.Tweens["Health"] = healthTween
-                    self.HealthText.Text = tostring(math.floor(newHealth))
-
-                    -- Эффект при получении урона
-                    if self.LastHealth and self.LastHealth > newHealth then
-                        self.DamageParticles.Enabled = true
-                        task.delay(0.5, function()
-                            if self.DamageParticles then
-                                self.DamageParticles.Enabled = false
-                            end
-                        end)
-
-                        -- Анимация изменения цвета бордера
-                        local damageColor = ColorSequence.new({
-                            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
-                            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
-                        })
-                        local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear)
-                        local tween = TweenService:Create(borderGradient, tweenInfo, {Color = damageColor})
-                        tween:Play()
-                        task.delay(0.5, function()
-                            if borderGradient then
-                                borderGradient.Color = ColorSequence.new({
-                                    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 105, 180)),
-                                    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 0))
-                                })
-                            end
-                        end)
-
-                        -- Анимация мигания баров
-                        local flashTweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, 2, true)
-                        local flashTween = TweenService:Create(self.HealthBar, flashTweenInfo, {BackgroundTransparency = 0.5})
-                        flashTween:Play()
-                    end
-                    self.LastHealth = newHealth
-                end)
-            end
-
-            if not self.ArmorConnection and armorObject then
-                self.ArmorConnection = armorObject:GetPropertyChangedSignal("Value"):Connect(function()
-                    local newArmorValue = armorObject.Value / 100
-                    if self.Tweens["Armor"] then
-                        self.Tweens["Armor"]:Cancel()
-                    end
-                    local armorTween = TweenService:Create(
-                        self.ArmorBar,
-                        tweenInfo,
-                        {Size = UDim2.new(math.clamp(newArmorValue, 0, 1), 0, 1, 0)}
-                    )
-                    armorTween:Play()
-                    self.Tweens["Armor"] = armorTween
-                    self.ArmorText.Text = tostring(math.floor(armorObject.Value))
-                    self.LastArmor = armorObject.Value
-                end)
-            end
         else
             self.MainFrame.Visible = false
             self.NameLabel.Text = "No Target"
@@ -724,7 +969,70 @@ local function UpdateTracer(deltaTime)
     end
 end
 
--- Выбор цели по нажатию клавиши
+-- НОВОЕ: Функция для подписки на события цели (здоровье и броня)
+local function SetupTargetMonitoring(target)
+    -- Отписываемся от предыдущих событий
+    if TargetHealthConnection then
+        TargetHealthConnection:Disconnect()
+        TargetHealthConnection = nil
+    end
+    if TargetArmorConnection then
+        TargetArmorConnection:Disconnect()
+        TargetArmorConnection = nil
+    end
+    LastTargetHealth = nil
+    LastTargetArmor = nil
+
+    if not target or not target.Character then return end
+
+    -- Подписка на здоровье
+    local humanoid = target.Character:FindFirstChild("Humanoid")
+    if humanoid and Settings.ConsoleLogger.LogTypes.Hitlog then
+        LastTargetHealth = humanoid.Health
+        TargetHealthConnection = humanoid.HealthChanged:Connect(function(newHealth)
+            if LastTargetHealth and newHealth < LastTargetHealth then
+                local time = os.date("%H:%M:%S")
+                local armor = 0
+                local armorObject = workspace:FindFirstChild("Players") and
+                                   workspace.Players:FindFirstChild(target.Name) and
+                                   workspace.Players[target.Name]:FindFirstChild("BodyEffects") and
+                                   workspace.Players[target.Name].BodyEffects:FindFirstChild("Armor")
+                if armorObject then
+                    armor = armorObject.Value
+                end
+                -- НОВОЕ: Цветной текст в Hitlog
+                Console.addLog(string.format(
+                    'Hitlog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>, Armor: <font color="rgb(0,0,255)">%.1f</font>',
+                    target.Name, time, newHealth, armor
+                ))
+            end
+            LastTargetHealth = newHealth
+        end)
+    end
+
+    -- Подписка на броню
+    local armorObject = workspace:FindFirstChild("Players") and
+                       workspace.Players:FindFirstChild(target.Name) and
+                       workspace.Players[target.Name]:FindFirstChild("BodyEffects") and
+                       workspace.Players[target.Name].BodyEffects:FindFirstChild("Armor")
+    if armorObject and Settings.ConsoleLogger.LogTypes.Hitlog then
+        LastTargetArmor = armorObject.Value
+        TargetArmorConnection = armorObject:GetPropertyChangedSignal("Value"):Connect(function()
+            local newArmor = armorObject.Value
+            if LastTargetHealth and LastTargetArmor and newArmor < LastTargetArmor then
+                local time = os.date("%H:%M:%S")
+                -- НОВОЕ: Цветной текст в Hitlog
+                Console.addLog(string.format(
+                    'Hitlog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>, Armor: <font color="rgb(0,0,255)">%.1f</font>',
+                    target.Name, time, LastTargetHealth, newArmor
+                ))
+            end
+            LastTargetArmor = newArmor
+        end)
+    end
+end
+
+-- Выбор цели по нажатию клавиши (ИЗМЕНЕНО: Цветной текст и мониторинг цели)
 UserInputService.InputBegan:Connect(function(Input, gameProcessedEvent)
     if gameProcessedEvent then return end
     if Input.KeyCode == Settings.Keybind then
@@ -736,6 +1044,18 @@ UserInputService.InputBegan:Connect(function(Input, gameProcessedEvent)
                 LogTargetInfo(targetInfo)
                 TracerBeam.Enabled = true
                 ParticleEmitter.Enabled = true
+                -- НОВОЕ: Подписка на здоровье и броню цели
+                SetupTargetMonitoring(Target)
+                -- Логирование TargetHookedLog
+                if Settings.ConsoleLogger.LogTypes.TargetHookedLog then
+                    local time = os.date("%H:%M:%S")
+                    local range = targetInfo and string.format("%.2f", targetInfo.Distance) or "N/A"
+                    -- НОВОЕ: Цветной текст
+                    Console.addLog(string.format(
+                        'TargetHookedLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Distance: %s',
+                        Target.Name, time, range
+                    ))
+                end
             else
                 warn("No target found")
                 TracerBeam.Enabled = false
@@ -743,6 +1063,26 @@ UserInputService.InputBegan:Connect(function(Input, gameProcessedEvent)
             end
         else
             warn("Unlocked from: " .. Target.Name)
+            -- Логирование TargetHookedLog при снятии цели
+            if Settings.ConsoleLogger.LogTypes.TargetHookedLog then
+                local time = os.date("%H:%M:%S")
+                -- НОВОЕ: Цветной текст
+                Console.addLog(string.format(
+                    'TargetHookedLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Status: Unhooked',
+                    Target.Name, time
+                ))
+            end
+            -- НОВОЕ: Отписка от событий цели
+            if TargetHealthConnection then
+                TargetHealthConnection:Disconnect()
+                TargetHealthConnection = nil
+            end
+            if TargetArmorConnection then
+                TargetArmorConnection:Disconnect()
+                TargetArmorConnection = nil
+            end
+            LastTargetHealth = nil
+            LastTargetArmor = nil
             Target = nil
             TracerBeam.Enabled = false
             ParticleEmitter.Enabled = false
@@ -755,6 +1095,46 @@ end)
 -- Обработка появления нового персонажа
 local function SetupCharacter(char)
     Character = char
+    local humanoid = char:FindFirstChild("Humanoid")
+    if humanoid then
+        LastLocalHealth = humanoid.Health
+        -- Подписка на изменение здоровья локального игрока
+        if Settings.ConsoleLogger.LogTypes.LocalPlayerDamageLog then
+            humanoid.HealthChanged:Connect(function(newHealth)
+                if LastLocalHealth and newHealth < LastLocalHealth then
+                    local time = os.date("%H:%M:%S")
+                    -- НОВОЕ: Цветной текст
+                    Console.addLog(string.format(
+                        'LocalPlayerDamageLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>',
+                        LocalPlayer.Name, time, newHealth
+                    ))
+                end
+                LastLocalHealth = newHealth
+            end)
+        end
+    end
+    -- Подписка на изменение брони локального игрока
+    local armorObject = workspace:FindFirstChild("Players") and
+                       workspace.Players:FindFirstChild(LocalPlayer.Name) and
+                       workspace.Players[LocalPlayer.Name]:FindFirstChild("BodyEffects") and
+                       workspace.Players[LocalPlayer.Name].BodyEffects:FindFirstChild("Armor")
+    if armorObject then
+        LastLocalArmor = armorObject.Value
+        if Settings.ConsoleLogger.LogTypes.LocalPlayerArmorLog then
+            armorObject:GetPropertyChangedSignal("Value"):Connect(function()
+                local newArmor = armorObject.Value
+                if LastLocalArmor and newArmor < LastLocalArmor then
+                    local time = os.date("%H:%M:%S")
+                    -- НОВОЕ: Цветной текст
+                    Console.addLog(string.format(
+                        'LocalPlayerArmorLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Armor: <font color="rgb(0,0,255)">%.1f</font>',
+                        LocalPlayer.Name, time, newArmor
+                    ))
+                end
+                LastLocalArmor = newArmor
+            end)
+        end
+    end
     char.ChildAdded:Connect(function(tool)
         if tool:IsA("Tool") then
             tool.Activated:Connect(function()
@@ -765,7 +1145,7 @@ local function SetupCharacter(char)
                     local Hit = GetPredictedPosition(rootPart, velocity)
                     -- Отправка данных серверу
                     ReplicatedStorage.MainEvent:FireServer("UpdateMousePos", Hit)
-                    -- Логирование информации о цели при активации
+                    -- Логирование информации о цели
                     local targetInfo = GetTargetInfo(Target)
                     LogTargetInfo(targetInfo)
                 end
@@ -777,6 +1157,7 @@ end
 -- Инициализация
 InitializeTracer()
 TargetStatsUI = InitializeTargetStats()
+Console.setVisible(Settings.ConsoleLogger.EnabledOnStart)
 
 -- Подключение к текущему и новым персонажам
 if Character then
@@ -797,5 +1178,11 @@ game:BindToClose(function()
     end
     if TargetStatsUI then
         TargetStatsUI:Destroy()
+    end
+    if TargetHealthConnection then
+        TargetHealthConnection:Disconnect()
+    end
+    if TargetArmorConnection then
+        TargetArmorConnection:Disconnect()
     end
 end)
