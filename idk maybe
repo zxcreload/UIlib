@@ -1,12 +1,13 @@
 --[[
-
-░█─── █▀▀ █▀▀█ █─█ █▀▀ █▀▀▄ 　 █▀▀▄ █──█ 
-░█─── █▀▀ █▄▄█ █▀▄ █▀▀ █──█ 　 █▀▀▄ █▄▄█ 
-░█▄▄█ ▀▀▀ ▀──▀ ▀─▀ ▀▀▀ ▀▀▀─ 　 ▀▀▀─ ▄▄▄█ 
-──▀ █▀▀█ █▀▄▀█ █─█ █── █▀▀ █▀▀ 
-──█ █▄▄█ █─▀─█ █▀▄ █── █▀▀ ▀▀█ 
-█▄█ ▀──▀ ▀───▀ ▀─▀ ▀▀▀ ▀▀▀ ▀▀▀
-
+  Targetstrafe с визуализацией Desync
+  Особенности:
+  - Полноценная R6 модель без головы
+  - Красивые материалы ForceField
+  - Настроенные параметры прозрачности
+  - Tracer от позиции головы до цели
+  - Эффект фонтана из партиклов на месте головы
+  - Dummy всегда смотрит на цель
+  - Плавное круговое движение
 ]]
 
 --> Services <--
@@ -14,12 +15,13 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Camera = workspace.CurrentCamera
+local Lighting = game:GetService("Lighting")
 
 --> LocalPlayer Variables <--
 local player = Players.LocalPlayer
-local playerCharacter = player.Character or player:WaitForChild("Character")
-local playerHumanoidRootPart = playerCharacter:FindFirstChild("HumanoidRootPart") or playerCharacter:WaitForChild("HumanoidRootPart")
-local playerHumanoid = playerCharacter:FindFirstChild("Humanoid") or playerCharacter:WaitForChild("Humanoid")
+local playerCharacter = player.Character or player.CharacterAdded:Wait()
+local playerHumanoidRootPart = playerCharacter:WaitForChild("HumanoidRootPart")
+local playerHumanoid = playerCharacter:WaitForChild("Humanoid")
 
 --> Create Camera Part <--
 local CameraPart = Instance.new("Part")
@@ -28,291 +30,367 @@ CameraPart.Anchored = true
 CameraPart.CanCollide = false
 CameraPart.Transparency = 1
 CameraPart.Size = Vector3.new(0.1, 0.1, 0.1)
-CameraPart.Parent = game.Workspace
-CameraPart.CFrame = playerHumanoidRootPart.CFrame * CFrame.new(0, 1.5, 0) -- Синхронизируем с головой игрока
+CameraPart.Parent = workspace
+CameraPart.CFrame = playerHumanoidRootPart.CFrame * CFrame.new(0, 1.5, 0)
 
---> Targetstrafe Config <--
+--> Targetstrafe Configuration <--
 getgenv().TargetstrafeConfig = {
+    -- Основные настройки
     Toggled = false,
-    Speed = 2,
-    Radius = 10,
-    HeightOffset = 3,
-    AfterimageCount = 8,
-    AfterimageInterval = 0.05,
-    AfterimageLifetime = 0.8,
-    BoxColor = Color3.fromRGB(0, 255, 255),
-    BoxThickness = 2,
-    BoxTransparency = 0.5,
-    UseFading = true,
-    UseDynamicBoxes = true,
-    MaxCursorDistance = 50  -- Максимальное расстояние от курсора для выбора цели
+    Speed = 2.5,
+    Radius = 8,
+    HeightOffset = 2.5,
+    MaxCursorDistance = 50,
+    
+    -- Визуальные настройки Dummy
+    DummyColor = Color3.fromRGB(100, 200, 255), -- Нежно-голубой цвет
+    DummyLifetime = 0.35,
+    UsePlayerAppearance = false, -- Не копируем внешность игрока
+    
+    -- Настройки материалов
+    BodyMaterial = Enum.Material.ForceField,
+    
+    -- Настройки прозрачности
+    BodyTransparency = 0.15,
+    AccessoryTransparency = 0.25,
+    
+    -- Настройки трейсера
+    TracerWidth = 0.2, -- Толщина трейсера
+    TracerTransparency = 0.3, -- Прозрачность трейсера
+    
+    -- Настройки эффекта партиклов
+    ParticleRate = 100, -- Количество частиц в секунду (увеличено с 50 до 100)
+    ParticleSpeed = 5, -- Скорость частиц
+    ParticleLifetime = NumberRange.new(0.5, 1), -- Время жизни частиц (от 0.5 до 1 секунды)
+    ParticleSize = NumberSequence.new(0.01, 0), -- Размер частиц (уменьшен с 0.1 до 0.05)
+    ParticleSpreadAngle = Vector2.new(30, 30) -- Угол разброса (конус 30 градусов)
 }
 
---> Variables for Targetstrafe <--
+--> Runtime Variables <--
 local target = nil
 local angle = 0
-local lastAfterimageTime = 0
-local boxCache = {}
 local originalCameraType = Camera.CameraType
 local originalFieldOfView = Camera.FieldOfView
+local currentDummy = nil
+local currentTracer = nil
+local currentParticleEmitter = nil
+local dummyCleanupTime = 0
 
---> Drawing Library Functions <--
-local function create3DBox(position, size)
-    local box = {
-        Lines = {},
-        Created = tick(),
-        Position = position,
-        Size = size
+--> Создание R6 Dummy с улучшенной визуализацией (без головы) <--
+local function createR6Dummy(position, targetPosition)
+    -- Удаляем старый dummy, трейсер и партиклы
+    if currentDummy and currentDummy.Parent then
+        currentDummy:Destroy()
+        currentDummy = nil
+    end
+    if currentTracer and currentTracer.Parent then
+        currentTracer:Destroy()
+        currentTracer = nil
+    end
+    if currentParticleEmitter and currentParticleEmitter.Parent then
+        currentParticleEmitter:Destroy()
+        currentParticleEmitter = nil
+    end
+
+    -- Создаем модель
+    local dummyModel = Instance.new("Model")
+    dummyModel.Name = "DesyncDummy"
+
+    -- Добавляем Humanoid
+    local humanoid = Instance.new("Humanoid")
+    humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+    humanoid.Parent = dummyModel
+
+    -- Список частей тела (без головы)
+    local bodyParts = {
+        {
+            Name = "Torso",
+            Size = Vector3.new(2, 2, 1),
+            CFrame = CFrame.new(position),
+            Material = TargetstrafeConfig.BodyMaterial,
+            Transparency = TargetstrafeConfig.BodyTransparency
+        },
+        {
+            Name = "Left Arm",
+            Size = Vector3.new(1, 2, 1),
+            CFrame = CFrame.new(position + Vector3.new(-1.5, 0, 0)),
+            Material = TargetstrafeConfig.BodyMaterial,
+            Transparency = TargetstrafeConfig.BodyTransparency
+        },
+        {
+            Name = "Right Arm",
+            Size = Vector3.new(1, 2, 1),
+            CFrame = CFrame.new(position + Vector3.new(1.5, 0, 0)),
+            Material = TargetstrafeConfig.BodyMaterial,
+            Transparency = TargetstrafeConfig.BodyTransparency
+        },
+        {
+            Name = "Left Leg",
+            Size = Vector3.new(1, 2, 1),
+            CFrame = CFrame.new(position + Vector3.new(-0.5, -2, 0)),
+            Material = TargetstrafeConfig.BodyMaterial,
+            Transparency = TargetstrafeConfig.BodyTransparency
+        },
+        {
+            Name = "Right Leg",
+            Size = Vector3.new(1, 2, 1),
+            CFrame = CFrame.new(position + Vector3.new(0.5, -2, 0)),
+            Material = TargetstrafeConfig.BodyMaterial,
+            Transparency = TargetstrafeConfig.BodyTransparency
+        },
+        {
+            Name = "HumanoidRootPart",
+            Size = Vector3.new(2, 2, 1),
+            CFrame = CFrame.new(position),
+            Transparency = 1
+        }
     }
-    
-    for i = 1, 12 do
-        local line = Drawing.new("Line")
-        line.Thickness = TargetstrafeConfig.BoxThickness
-        line.Color = TargetstrafeConfig.BoxColor
-        line.Transparency = 1 - TargetstrafeConfig.BoxTransparency
-        line.Visible = true
-        table.insert(box.Lines, line)
+
+    -- Создаем и настраиваем части тела
+    for _, partData in ipairs(bodyParts) do
+        local part = Instance.new("Part")
+        part.Name = partData.Name
+        part.Size = partData.Size
+        part.CFrame = partData.CFrame
+        part.CanCollide = false
+        part.Anchored = true
+        part.TopSurface = Enum.SurfaceType.Smooth
+        part.BottomSurface = Enum.SurfaceType.Smooth
+        part.Color = TargetstrafeConfig.DummyColor
+        part.Transparency = partData.Transparency
+        part.Material = partData.Material or Enum.Material.Plastic
+        part.Parent = dummyModel
     end
-    
-    table.insert(boxCache, box)
-    return box
+
+    -- Устанавливаем PrimaryPart
+    dummyModel.PrimaryPart = dummyModel:WaitForChild("HumanoidRootPart")
+
+    -- Направляем Dummy на цель
+    if targetPosition then
+        local lookAt = CFrame.new(position, Vector3.new(targetPosition.X, position.Y, targetPosition.Z))
+        dummyModel:SetPrimaryPartCFrame(lookAt)
+    end
+
+    dummyModel.Parent = workspace
+    currentDummy = dummyModel
+    dummyCleanupTime = tick() + TargetstrafeConfig.DummyLifetime
+
+    -- Создаем трейсер и эффект партиклов
+    if targetPosition then
+        local headPosition = position + Vector3.new(0, 1.5, 0) -- Позиция, где была бы голова
+
+        -- Создаем точки привязки для трейсера
+        local attachment0 = Instance.new("Attachment")
+        attachment0.Position = headPosition - position -- Относительная позиция от HumanoidRootPart
+        attachment0.Parent = dummyModel.HumanoidRootPart
+
+        local attachment1 = Instance.new("Attachment")
+        attachment1.Parent = target.Character:FindFirstChild("HumanoidRootPart")
+
+        -- Создаем Beam (трейсер)
+        local beam = Instance.new("Beam")
+        beam.Name = "Tracer"
+        beam.Attachment0 = attachment0
+        beam.Attachment1 = attachment1
+        beam.Color = ColorSequence.new(TargetstrafeConfig.DummyColor) -- Синхронизируем цвет с Dummy
+        beam.Width0 = TargetstrafeConfig.TracerWidth
+        beam.Width1 = TargetstrafeConfig.TracerWidth
+        beam.Transparency = NumberSequence.new(TargetstrafeConfig.TracerTransparency)
+        beam.Parent = dummyModel
+
+        currentTracer = beam
+
+        -- Создаем эффект фонтана из партиклов с помощью Attachment
+        local particleAttachment = Instance.new("Attachment")
+        particleAttachment.Position = headPosition - position -- Относительная позиция от HumanoidRootPart (где была бы голова)
+        particleAttachment.Parent = dummyModel.HumanoidRootPart
+
+        local particleEmitter = Instance.new("ParticleEmitter")
+        particleEmitter.Name = "FountainEffect"
+        particleEmitter.Parent = particleAttachment -- Привязываем к Attachment вместо HumanoidRootPart
+
+        -- Настраиваем эффект фонтана
+        particleEmitter.Color = ColorSequence.new(TargetstrafeConfig.DummyColor) -- Синхронизируем цвет с Dummy
+        particleEmitter.EmissionDirection = Enum.NormalId.Top -- Направление вверх
+        particleEmitter.SpreadAngle = TargetstrafeConfig.ParticleSpreadAngle -- Конус разброса
+        particleEmitter.Speed = TargetstrafeConfig.ParticleSpeed -- Скорость частиц
+        particleEmitter.Lifetime = TargetstrafeConfig.ParticleLifetime -- Время жизни частиц
+        particleEmitter.Size = TargetstrafeConfig.ParticleSize -- Размер частиц (уже уменьшен)
+        particleEmitter.Rate = TargetstrafeConfig.ParticleRate -- Частота испускания частиц (увеличена)
+        particleEmitter.Transparency = NumberSequence.new(0, 1) -- Частицы исчезают к концу жизни
+        particleEmitter.Enabled = true
+
+        currentParticleEmitter = particleEmitter
+    end
+
+    return dummyModel
 end
 
-local function update3DBox(box)
-    local corners = {}
-    local position = box.Position
-    local size = box.Size
-    
-    local halfSize = size / 2
-    corners[1] = position + Vector3.new(-halfSize.X, -halfSize.Y, -halfSize.Z)
-    corners[2] = position + Vector3.new(halfSize.X, -halfSize.Y, -halfSize.Z)
-    corners[3] = position + Vector3.new(halfSize.X, -halfSize.Y, halfSize.Z)
-    corners[4] = position + Vector3.new(-halfSize.X, -halfSize.Y, halfSize.Z)
-    
-    corners[5] = position + Vector3.new(-halfSize.X, halfSize.Y, -halfSize.Z)
-    corners[6] = position + Vector3.new(halfSize.X, halfSize.Y, -halfSize.Z)
-    corners[7] = position + Vector3.new(halfSize.X, halfSize.Y, halfSize.Z)
-    corners[8] = position + Vector3.new(-halfSize.X, halfSize.Y, halfSize.Z)
-    
-    local screenPoints = {}
-    for i, corner in ipairs(corners) do
-        local screenPos, visible = Camera:WorldToViewportPoint(corner)
-        screenPoints[i] = {Position = Vector2.new(screenPos.X, screenPos.Y), Visible = visible}
-    end
-    
-    local lines = box.Lines
-    
-    lines[1].From = screenPoints[1].Position
-    lines[1].To = screenPoints[2].Position
-    lines[2].From = screenPoints[2].Position
-    lines[2].To = screenPoints[3].Position
-    lines[3].From = screenPoints[3].Position
-    lines[3].To = screenPoints[4].Position
-    lines[4].From = screenPoints[4].Position
-    lines[4].To = screenPoints[1].Position
-    
-    lines[5].From = screenPoints[5].Position
-    lines[5].To = screenPoints[6].Position
-    lines[6].From = screenPoints[6].Position
-    lines[6].To = screenPoints[7].Position
-    lines[7].From = screenPoints[7].Position
-    lines[7].To = screenPoints[8].Position
-    lines[8].From = screenPoints[8].Position
-    lines[8].To = screenPoints[5].Position
-    
-    lines[9].From = screenPoints[1].Position
-    lines[9].To = screenPoints[5].Position
-    lines[10].From = screenPoints[2].Position
-    lines[10].To = screenPoints[6].Position
-    lines[11].From = screenPoints[3].Position
-    lines[11].To = screenPoints[7].Position
-    lines[12].From = screenPoints[4].Position
-    lines[12].To = screenPoints[8].Position
-    
-    for i, line in ipairs(lines) do
-        local fromIndex = math.ceil(i / 2)
-        local toIndex = fromIndex + (i % 2 == 0 and 1 or 0)
-        toIndex = toIndex > 8 and toIndex - 8 or toIndex
-        
-        line.Visible = screenPoints[fromIndex].Visible and screenPoints[toIndex].Visible
-    end
-    
-    if TargetstrafeConfig.UseFading then
-        local lifePercent = 1 - (tick() - box.Created) / TargetstrafeConfig.AfterimageLifetime
-        if lifePercent < 0 then lifePercent = 0 end
-        
-        local alpha = TargetstrafeConfig.BoxTransparency + (1 - TargetstrafeConfig.BoxTransparency) * lifePercent
-        for _, line in ipairs(lines) do
-            line.Transparency = 1 - alpha
-        end
-    end
-end
-
-local function cleanUpBoxes()
-    local currentTime = tick()
-    for i = #boxCache, 1, -1 do
-        local box = boxCache[i]
-        if currentTime - box.Created > TargetstrafeConfig.AfterimageLifetime then
-            for _, line in ipairs(box.Lines) do
-                line:Remove()
-            end
-            table.remove(boxCache, i)
-        end
-    end
-end
-
---> Function to Update Afterimage Tail <--
-local function updateAfterimageTail(position)
-    local boxSize = Vector3.new(2, 4, 1)
-    if TargetstrafeConfig.UseDynamicBoxes then
-        local distance = (position - Camera.CFrame.Position).Magnitude
-        boxSize = Vector3.new(2, 4, 1) * (distance / 50)
-    end
-    
-    create3DBox(position, boxSize)
-    
-    while #boxCache > TargetstrafeConfig.AfterimageCount do
-        local oldBox = table.remove(boxCache, 1)
-        for _, line in ipairs(oldBox.Lines) do
-            line:Remove()
-        end
-    end
-end
-
-local function clearAfterimageTail()
-    for _, box in ipairs(boxCache) do
-        for _, line in ipairs(box.Lines) do
-            line:Remove()
-        end
-    end
-    boxCache = {}
-end
-
---> Функция для выбора цели по курсору <--
+--> Поиск цели под курсором <--
 local function getNearestPlayerToCursor()
     local closestPlayer = nil
     local minDistance = TargetstrafeConfig.MaxCursorDistance
     local mousePos = UserInputService:GetMouseLocation()
 
     for _, otherPlayer in pairs(Players:GetPlayers()) do
-        if otherPlayer ~= player and otherPlayer.Character and otherPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            local targetRoot = otherPlayer.Character.HumanoidRootPart
-            local screenPos, visible = Camera:WorldToViewportPoint(targetRoot.Position)
-            
-            if visible then
-                local cursorDistance = (Vector2.new(mousePos.X, mousePos.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
-                
-                if cursorDistance < minDistance then
-                    minDistance = cursorDistance
-                    closestPlayer = otherPlayer
+        if otherPlayer ~= player and otherPlayer.Character then
+            local targetRoot = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if targetRoot then
+                local screenPos, visible = Camera:WorldToViewportPoint(targetRoot.Position)
+                if visible then
+                    local cursorDistance = (Vector2.new(mousePos.X, mousePos.Y) - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
+                    if cursorDistance < minDistance then
+                        minDistance = cursorDistance
+                        closestPlayer = otherPlayer
+                    end
                 end
             end
         end
     end
-    
+
     return closestPlayer
 end
 
---> Handle Key Press <--
+--> Переключение Targetstrafe <--
+local function toggleTargetstrafe()
+    if not TargetstrafeConfig.Toggled then
+        target = getNearestPlayerToCursor()
+        if target then
+            TargetstrafeConfig.Toggled = true
+            
+            -- Сохраняем оригинальные настройки камеры
+            originalCameraType = Camera.CameraType
+            originalFieldOfView = Camera.FieldOfView
+            
+            -- Устанавливаем камеру на CameraPart
+            Camera.CameraType = Enum.CameraType.Custom
+            Camera.CameraSubject = CameraPart
+            Camera.FieldOfView = originalFieldOfView
+            
+            print("Targetstrafe включен на: " .. target.Name)
+        else
+            print("Нет цели в области курсора!")
+        end
+    else
+        TargetstrafeConfig.Toggled = false
+        target = nil
+        
+        -- Удаляем Dummy, трейсер и партиклы
+        if currentDummy and currentDummy.Parent then
+            currentDummy:Destroy()
+            currentDummy = nil
+        end
+        if currentTracer and currentTracer.Parent then
+            currentTracer:Destroy()
+            currentTracer = nil
+        end
+        if currentParticleEmitter and currentParticleEmitter.Parent then
+            currentParticleEmitter:Destroy()
+            currentParticleEmitter = nil
+        end
+        
+        -- Восстанавливаем камеру
+        Camera.CameraSubject = playerHumanoid
+        Camera.FieldOfView = originalFieldOfView
+        Camera.CameraType = originalCameraType
+        
+        print("Targetstrafe выключен")
+    end
+end
+
+--> Обработчик ввода <--
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.E then
-        if not TargetstrafeConfig.Toggled then
-            target = getNearestPlayerToCursor()
-            if target then
-                TargetstrafeConfig.Toggled = true
-                -- Синхронизируем CameraPart с текущим положением игрока
-                CameraPart.CFrame = playerHumanoidRootPart.CFrame * CFrame.new(0, 1.5, 0)
-                -- Сохраняем текущие параметры камеры
-                local currentCFrame = Camera.CFrame
-                originalCameraType = Camera.CameraType
-                originalFieldOfView = Camera.FieldOfView
-                -- Переключаем CameraSubject на CameraPart
-                Camera.CameraType = Enum.CameraType.Custom
-                Camera.CameraSubject = CameraPart
-                Camera.CFrame = currentCFrame -- Восстанавливаем CFrame после переключения
-                Camera.FieldOfView = originalFieldOfView
-                print("Targetstrafe enabled on: " .. target.Name)
-            else
-                print("No target in cursor area!")
-            end
-        else
-            TargetstrafeConfig.Toggled = false
-            target = nil
-            clearAfterimageTail()
-            -- Сохраняем текущие параметры камеры
-            local currentCFrame = Camera.CFrame
-            -- Переключаем обратно на playerHumanoid
-            Camera.CameraSubject = playerHumanoid
-            Camera.CFrame = currentCFrame -- Восстанавливаем CFrame после переключения
-            Camera.FieldOfView = originalFieldOfView
-            Camera.CameraType = originalCameraType
-            print("Targetstrafe disabled")
-        end
+        toggleTargetstrafe()
     end
 end)
 
---> Handle Character Respawn <--
-player.CharacterAdded:Connect(function(NewCharacter)
-    playerCharacter = NewCharacter
-    playerHumanoidRootPart = NewCharacter:FindFirstChild("HumanoidRootPart") or NewCharacter:WaitForChild("HumanoidRootPart")
-    playerHumanoid = NewCharacter:FindFirstChild("Humanoid") or NewCharacter:WaitForChild("Humanoid")
+--> Обработчик респавна <--
+player.CharacterAdded:Connect(function(newCharacter)
+    playerCharacter = newCharacter
+    playerHumanoidRootPart = newCharacter:WaitForChild("HumanoidRootPart")
+    playerHumanoid = newCharacter:WaitForChild("Humanoid")
     
-    -- Синхронизируем CameraPart
+    -- Обновляем CameraPart
     CameraPart.CFrame = playerHumanoidRootPart.CFrame * CFrame.new(0, 1.5, 0)
     
+    -- Восстанавливаем настройки камеры
     if TargetstrafeConfig.Toggled then
-        -- Если десинхронизация включена, используем CameraPart
         Camera.CameraType = Enum.CameraType.Custom
         Camera.CameraSubject = CameraPart
-        Camera.FieldOfView = originalFieldOfView
     else
-        -- Иначе используем playerHumanoid
         Camera.CameraSubject = playerHumanoid
         Camera.CameraType = originalCameraType
-        Camera.FieldOfView = originalFieldOfView
-        clearAfterimageTail()
+    end
+    Camera.FieldOfView = originalFieldOfView
+    
+    -- Удаляем Dummy, трейсер и партиклы при респавне
+    if currentDummy and currentDummy.Parent then
+        currentDummy:Destroy()
+        currentDummy = nil
+    end
+    if currentTracer and currentTracer.Parent then
+        currentTracer:Destroy()
+        currentTracer = nil
+    end
+    if currentParticleEmitter and currentParticleEmitter.Parent then
+        currentParticleEmitter:Destroy()
+        currentParticleEmitter = nil
     end
 end)
 
---> Main Render Loop <--
+--> Основной цикл движения <--
 RunService.Heartbeat:Connect(function(deltaTime)
-    local realCFrame = playerHumanoidRootPart.CFrame
+    -- Обновляем позицию CameraPart
+    CameraPart.CFrame = playerHumanoidRootPart.CFrame * CFrame.new(0, 1.5, 0)
     
-    -- Обновляем CameraPart, чтобы он следовал за реальным положением игрока
-    CameraPart.CFrame = realCFrame * CFrame.new(0, 1.5, 0)
-    
-    if TargetstrafeConfig.Toggled and target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
-        local targetRootPart = target.Character.HumanoidRootPart
-        local originalVelocity = playerHumanoidRootPart.AssemblyLinearVelocity
-        
-        angle = angle + TargetstrafeConfig.Speed * deltaTime
-        
-        local offsetX = math.cos(angle) * TargetstrafeConfig.Radius
-        local offsetZ = math.sin(angle) * TargetstrafeConfig.Radius
-        local desyncPosition = targetRootPart.Position + Vector3.new(offsetX, TargetstrafeConfig.HeightOffset, offsetZ)
-        
-        local currentTime = tick()
-        if currentTime - lastAfterimageTime >= TargetstrafeConfig.AfterimageInterval then
-            updateAfterimageTail(desyncPosition)
-            lastAfterimageTime = currentTime
+    -- Удаляем старый Dummy, трейсер и партиклы если время вышло
+    if currentDummy and tick() > dummyCleanupTime then
+        currentDummy:Destroy()
+        currentDummy = nil
+        if currentTracer and currentTracer.Parent then
+            currentTracer:Destroy()
+            currentTracer = nil
         end
-        
-        -- Применяем десинхронизацию
-        playerHumanoidRootPart.CFrame = CFrame.new(desyncPosition)
-        playerHumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0) -- Сбрасываем скорость, чтобы избежать физических багов
-        
-        -- Ждем рендеринг кадра
-        RunService.RenderStepped:Wait()
-        
-        -- Восстанавливаем реальное положение
-        playerHumanoidRootPart.CFrame = realCFrame
-        playerHumanoidRootPart.AssemblyLinearVelocity = originalVelocity
+        if currentParticleEmitter and currentParticleEmitter.Parent then
+            currentParticleEmitter:Destroy()
+            currentParticleEmitter = nil
+        end
     end
     
-    for _, box in ipairs(boxCache) do
-        update3DBox(box)
+    -- Выполняем Targetstrafe если включен и есть цель
+    if TargetstrafeConfig.Toggled and target and target.Character then
+        local targetRootPart = target.Character:FindFirstChild("HumanoidRootPart")
+        if targetRootPart then
+            local originalVelocity = playerHumanoidRootPart.AssemblyLinearVelocity
+            
+            -- Рассчитываем новую позицию
+            angle = angle + TargetstrafeConfig.Speed * deltaTime
+            local offsetX = math.cos(angle) * TargetstrafeConfig.Radius
+            local offsetZ = math.sin(angle) * TargetstrafeConfig.Radius
+            local desyncPosition = targetRootPart.Position + Vector3.new(offsetX, TargetstrafeConfig.HeightOffset, offsetZ)
+            
+            -- Создаем или обновляем Dummy
+            if not currentDummy then
+                createR6Dummy(desyncPosition, targetRootPart.Position)
+            else
+                local lookAt = CFrame.new(desyncPosition, Vector3.new(targetRootPart.Position.X, desyncPosition.Y, targetRootPart.Position.Z))
+                currentDummy:SetPrimaryPartCFrame(lookAt)
+            end
+            
+            -- Перемещаем персонажа в desync позицию
+            playerHumanoidRootPart.CFrame = CFrame.new(desyncPosition)
+            playerHumanoidRootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            
+            -- Ждем следующего кадра
+            RunService.RenderStepped:Wait()
+            
+            -- Возвращаем оригинальную позицию
+            playerHumanoidRootPart.CFrame = CameraPart.CFrame * CFrame.new(0, -1.5, 0)
+            playerHumanoidRootPart.AssemblyLinearVelocity = originalVelocity
+        end
     end
-    
-    cleanUpBoxes()
 end)
+
+print("Targetstrafe script loaded successfully!")
