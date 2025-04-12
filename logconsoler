@@ -6,7 +6,7 @@ local UserInputService = game:GetService("UserInputService")
 
 -- Создаем ScreenGui для консоли
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "LogConsole"
+screenGui.Name = "TitanCX"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = PlayerGui
 
@@ -14,7 +14,7 @@ screenGui.Parent = PlayerGui
 local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 300, 0, 200)
 mainFrame.Position = UDim2.new(0, 50, 0, 50)
-mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 48) -- Темно-серый фон Windows 10
+mainFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 73) -- Светлый серый фон
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = screenGui
 
@@ -30,18 +30,32 @@ shadow.ScaleType = Enum.ScaleType.Slice
 shadow.SliceCenter = Rect.new(10, 10, 10, 10)
 shadow.Parent = mainFrame
 
--- Заголовочная панель (Title Bar)
+-- Заголовочная панель (Title Bar) как один объект
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1, 0, 0, 30)
-titleBar.BackgroundColor3 = Color3.fromRGB(0, 120, 215) -- Синий цвет Windows 10
+titleBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- Базовый цвет (будет перекрыт градиентом)
 titleBar.BorderSizePixel = 0
 titleBar.Parent = mainFrame
 
+-- Закругление всех углов
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 10) -- Закругление на всех углах
+uiCorner.Parent = titleBar
+
+-- Линеарный градиент (желтый -> розовый)
+local uiGradient = Instance.new("UIGradient")
+uiGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 215, 0)), -- Желтый
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 105, 180)) -- Розовый
+})
+uiGradient.Rotation = 90
+uiGradient.Parent = titleBar
+
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(0.7, 0, 1, 0)
-titleLabel.Position = UDim2.new(0, 10, 0, 0) -- Отступ слева
+titleLabel.Position = UDim2.new(0, 10, 0, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "LogConsole"
+titleLabel.Text = "TitanCX console"
 titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 titleLabel.TextSize = 14
 titleLabel.Font = Enum.Font.Gotham
@@ -55,28 +69,36 @@ local buttonSize = UDim2.new(0, 45, 0, 30)
 local maximizeButton = Instance.new("TextButton")
 maximizeButton.Size = buttonSize
 maximizeButton.Position = UDim2.new(1, -90, 0, 0)
-maximizeButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-maximizeButton.BorderSizePixel = 0
-maximizeButton.Text = "□"
-maximizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-maximizeButton.TextSize = 14
-maximizeButton.Font = Enum.Font.Gotham
+maximizeButton.BackgroundTransparency = 1
+maximizeButton.Text = "" -- Убираем текст
 maximizeButton.Parent = titleBar
+
+-- Иконка для maximizeButton (увеличение/уменьшение)
+local maximizeIcon = Instance.new("ImageLabel")
+maximizeIcon.Size = UDim2.new(0, 20, 0, 20)
+maximizeIcon.Position = UDim2.new(0.5, -10, 0.5, -10) -- Центрируем иконку
+maximizeIcon.BackgroundTransparency = 1
+maximizeIcon.Image = "rbxassetid://81207376475342" -- Иконка увеличения
+maximizeIcon.Parent = maximizeButton
 
 local closeButton = Instance.new("TextButton")
 closeButton.Size = buttonSize
 closeButton.Position = UDim2.new(1, -45, 0, 0)
-closeButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
-closeButton.BorderSizePixel = 0
-closeButton.Text = "X"
-closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeButton.TextSize = 14
-closeButton.Font = Enum.Font.Gotham
+closeButton.BackgroundTransparency = 1
+closeButton.Text = "" -- Убираем текст
 closeButton.Parent = titleBar
+
+-- Иконка для closeButton (закрытие)
+local closeIcon = Instance.new("ImageLabel")
+closeIcon.Size = UDim2.new(0, 20, 0, 20)
+closeIcon.Position = UDim2.new(0.5, -10, 0.5, -10) -- Центрируем иконку
+closeIcon.BackgroundTransparency = 1
+closeIcon.Image = "rbxassetid://100234668796385" -- Иконка закрытия
+closeIcon.Parent = closeButton
 
 -- Текстовое поле для логов
 local logList = Instance.new("ScrollingFrame")
-logList.Size = UDim2.new(1, -10, 1, -70) -- Учитываем заголовок и футер
+logList.Size = UDim2.new(1, -10, 1, -55)
 logList.Position = UDim2.new(0, 5, 0, 35)
 logList.BackgroundTransparency = 1
 logList.ScrollBarThickness = 4
@@ -89,17 +111,17 @@ logLayout.Parent = logList
 
 -- Нижняя панель с версией
 local footer = Instance.new("Frame")
-footer.Size = UDim2.new(1, 0, 0, 30)
-footer.Position = UDim2.new(0, 0, 1, -30)
-footer.BackgroundColor3 = Color3.fromRGB(63, 63, 70) -- Темнее, чем основной фон
+footer.Size = UDim2.new(1, 0, 0, 20)
+footer.Position = UDim2.new(0, 0, 1, -20)
+footer.BackgroundColor3 = Color3.fromRGB(90, 90, 97)
 footer.BorderSizePixel = 0
 footer.Parent = mainFrame
 
 local versionLabel = Instance.new("TextLabel")
 versionLabel.Size = UDim2.new(1, 0, 1, 0)
 versionLabel.BackgroundTransparency = 1
-versionLabel.Text = "Console log v3.17"
-versionLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+versionLabel.Text = "cursed by 32vision"
+versionLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
 versionLabel.TextSize = 14
 versionLabel.Font = Enum.Font.Gotham
 versionLabel.Parent = footer
@@ -110,7 +132,7 @@ local function addLog(message: string)
     logEntry.Size = UDim2.new(1, 0, 0, 20)
     logEntry.BackgroundTransparency = 1
     logEntry.Text = message
-    logEntry.TextColor3 = Color3.fromRGB(200, 200, 200)
+    logEntry.TextColor3 = Color3.fromRGB(255, 255, 255)
     logEntry.TextSize = 14
     logEntry.Font = Enum.Font.Gotham
     logEntry.TextXAlignment = Enum.TextXAlignment.Left
@@ -160,20 +182,18 @@ local resizing = false
 local resizeStart = nil
 local startSize = nil
 
--- Невидимая зона в правом нижнем углу для изменения размера
 local resizeArea = Instance.new("TextButton")
 resizeArea.Size = UDim2.new(0, 20, 0, 20)
-resizeArea.Position = UDim2.new(1, -20, 1, -20) -- Правый нижний угол
+resizeArea.Position = UDim2.new(1, -20, 1, -20)
 resizeArea.BackgroundTransparency = 1
 resizeArea.Text = ""
 resizeArea.Parent = mainFrame
 
--- Визуальная пометка (диагональные линии)
 local resizeIndicator = Instance.new("ImageLabel")
 resizeIndicator.Size = UDim2.new(0, 20, 0, 20)
 resizeIndicator.Position = UDim2.new(1, -20, 1, -20)
 resizeIndicator.BackgroundTransparency = 1
-resizeIndicator.Image = "rbxassetid://6014261993" -- Текстура диагональных линий (Roblox asset)
+resizeIndicator.Image = "rbxassetid://6014261993"
 resizeIndicator.ImageColor3 = Color3.fromRGB(200, 200, 200)
 resizeIndicator.Parent = mainFrame
 
@@ -188,7 +208,6 @@ end)
 UserInputService.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement and resizing then
         local delta = input.Position - resizeStart
-        -- Движение вправо увеличивает ширину, вниз увеличивает высоту
         local newWidth = math.max(200, startSize.X.Offset + delta.X)
         local newHeight = math.max(150, startSize.Y.Offset + delta.Y)
         mainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
@@ -220,7 +239,7 @@ maximizeButton.MouseButton1Click:Connect(function()
         -- Восстановить
         mainFrame.Size = normalSize
         mainFrame.Position = normalPosition
-        maximizeButton.Text = "□"
+        maximizeIcon.Image = "rbxassetid://81207376475342" -- Иконка увеличения
         isMaximized = false
     else
         -- Развернуть
@@ -228,7 +247,7 @@ maximizeButton.MouseButton1Click:Connect(function()
         normalPosition = mainFrame.Position
         mainFrame.Size = UDim2.new(1, 0, 1, 0)
         mainFrame.Position = UDim2.new(0, 0, 0, 0)
-        maximizeButton.Text = "❐"
+        maximizeIcon.Image = "rbxassetid://84930406585654" -- Иконка уменьшения
         isMaximized = true
     end
 end)
@@ -241,9 +260,10 @@ end)
 local function applyHoverEffect(button, hoverColor)
     button.MouseEnter:Connect(function()
         button.BackgroundColor3 = hoverColor
+        button.BackgroundTransparency = 0
     end)
     button.MouseLeave:Connect(function()
-        button.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+        button.BackgroundTransparency = 1
     end)
 end
 
