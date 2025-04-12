@@ -1,1 +1,801 @@
+-- SETTINGS
+local Settings = {
+    -- Общие настройки аимбота
+    Keybind = Enum.KeyCode.C,  -- Клавиша для выбора цели
+    PredictionFactor = 0.141245121,  -- Коэффициент предсказания движения
 
+    -- Настройки jump offset
+    JumpOffset = {
+        TimeThreshold = 3,  -- Время в секундах для определения "полета"
+        Height = 2,  -- Смещение точки прицеливания вверх при прыжке (в стадах)
+    },
+
+    -- Настройки трейсера (Beam)
+    Tracer = {
+        Color = Color3.fromRGB(255, 50, 50),  -- Основной цвет трейсера
+        FadeColor = Color3.fromRGB(255, 150, 150),  -- Цвет для градиента
+        Width0 = 0.2,  -- Ширина в начале
+        Width1 = 0.1,  -- Ширина в конце
+        Texture = "rbxassetid://7151778301",  -- Текстура трейсера
+        TextureSpeed = 2,  -- Скорость анимации текстуры
+        LightEmission = 1,  -- Свечение
+        LightInfluence = 0,  -- Влияние внешнего освещения
+        BrightnessPulse = 0.3  -- Амплитуда пульсации яркости
+    },
+
+    -- Настройки частиц (ParticleEmitter)
+    Particles = {
+        Color = Color3.fromRGB(255, 50, 50),  -- Цвет частиц
+        Size = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.1),
+            NumberSequenceKeypoint.new(1, 0)
+        }),
+        Lifetime = NumberRange.new(0.3, 0.5),  -- Время жизни частиц
+        Rate = 50,  -- Частота появления частиц
+        Speed = NumberRange.new(2, 5),  -- Скорость частиц
+        SpreadAngle = Vector2.new(-30, 30)  -- Угол разброса
+    },
+
+    -- Настройки TargetStats UI
+    TargetStats = {
+        FrameSize = UDim2.new(0, 300, 0, 120),
+        BackgroundColor = Color3.fromRGB(15, 15, 15),
+        BackgroundTransparency = 0.3,
+        GradientColors = {
+            Start = Color3.fromRGB(255, 105, 180),
+            End = Color3.fromRGB(255, 255, 0)
+        },
+        HealthBar = {
+            DarkColor = Color3.fromRGB(200, 0, 0),
+            LightColor = Color3.fromRGB(255, 69, 0),
+            Size = UDim2.new(0.65, 0, 0.15, 0),
+            Position = UDim2.new(0.3, 5, 0.35, 0)
+        },
+        ArmorBar = {
+            DarkColor = Color3.fromRGB(0, 0, 200),
+            LightColor = Color3.fromRGB(30, 144, 255),
+            Size = UDim2.new(0.65, 0, 0.15, 0),
+            Position = UDim2.new(0.3, 5, 0.55, 0)
+        },
+        Avatar = {
+            Size = UDim2.new(0.25, 0, 0.5, 0),
+            Position = UDim2.new(0.03, 0, 0.25, 0)
+        },
+        PositionLabel = {
+            Size = UDim2.new(0.65, 0, 0.15, 0),
+            Position = UDim2.new(0.3, 5, 0.75, 0)
+        },
+        Animation = {
+            TweenTime = 0.3,
+            EasingStyle = Enum.EasingStyle.Quad,
+            EasingDirection = Enum.EasingDirection.Out
+        },
+        Drag = {
+            Sensitivity = 2.00,
+            Smoothness = 0.03
+        },
+        DamageParticles = {
+            Color = Color3.fromRGB(255, 50, 50),
+            Size = NumberSequence.new({
+                NumberSequenceKeypoint.new(0, 0.3),
+                NumberSequenceKeypoint.new(1, 0)
+            }),
+            Lifetime = NumberRange.new(0.5, 0.7),
+            Rate = 30,
+            Speed = NumberRange.new(2, 4),
+            SpreadAngle = Vector2.new(-60, 60)
+        }
+    }
+}
+
+-- SERVICES
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local GuiService = game:GetService("GuiService")
+
+-- VARIABLES
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
+local Target = nil  -- Хранит выбранную цель
+local Character = LocalPlayer.Character
+local TracerBeam = nil  -- Объект Beam для трейсера
+local TracerAttachment0 = nil  -- Точка начала трейсера
+local TracerAttachment1 = nil  -- Точка конца трейсера
+local ParticleEmitter = nil  -- Эффекты на конце трейсера
+local TargetAirTime = 0  -- Время, проведенное целью в воздухе
+local TargetStatus = "Ground"  -- Статус цели: "Ground", "Jumped", "Fly"
+local TargetStatsUI = nil  -- Переменная для хранения UI TargetStats
+
+-- Инициализация 3D-трейсера
+local function InitializeTracer()
+    if TracerBeam then
+        TracerBeam:Destroy()
+        TracerAttachment0:Destroy()
+        TracerAttachment1:Destroy()
+        ParticleEmitter:Destroy()
+    end
+
+    TracerAttachment0 = Instance.new("Attachment")
+    TracerAttachment1 = Instance.new("Attachment")
+    TracerAttachment0.Name = "TracerStart"
+    TracerAttachment1.Name = "TracerEnd"
+
+    TracerBeam = Instance.new("Beam")
+    TracerBeam.Name = "AimTracer"
+    TracerBeam.Attachment0 = TracerAttachment0
+    TracerBeam.Attachment1 = TracerAttachment1
+    TracerBeam.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Settings.Tracer.Color),
+        ColorSequenceKeypoint.new(1, Settings.Tracer.FadeColor)
+    })
+    TracerBeam.LightEmission = Settings.Tracer.LightEmission
+    TracerBeam.LightInfluence = Settings.Tracer.LightInfluence
+    TracerBeam.Width0 = Settings.Tracer.Width0
+    TracerBeam.Width1 = Settings.Tracer.Width1
+    TracerBeam.Texture = Settings.Tracer.Texture
+    TracerBeam.TextureSpeed = Settings.Tracer.TextureSpeed
+    TracerBeam.Enabled = false
+    TracerBeam.Parent = workspace.Terrain
+
+    ParticleEmitter = Instance.new("ParticleEmitter")
+    ParticleEmitter.Color = ColorSequence.new(Settings.Particles.Color)
+    ParticleEmitter.Size = Settings.Particles.Size
+    ParticleEmitter.Lifetime = Settings.Particles.Lifetime
+    ParticleEmitter.Rate = Settings.Particles.Rate
+    ParticleEmitter.Speed = Settings.Particles.Speed
+    ParticleEmitter.SpreadAngle = Settings.Particles.SpreadAngle
+    ParticleEmitter.Enabled = false
+    ParticleEmitter.Parent = TracerAttachment1
+end
+
+-- Функция для получения информации о цели
+local function GetTargetInfo(player)
+    if not player or not player.Character then
+        return nil
+    end
+    local humanoid = player.Character:FindFirstChild("Humanoid")
+    local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not rootPart then
+        return nil
+    end
+    return {
+        Name = player.Name,
+        Health = humanoid.Health,
+        MaxHealth = humanoid.MaxHealth,
+        Position = rootPart.Position,
+        Distance = (rootPart.Position - (Character and Character.HumanoidRootPart and Character.HumanoidRootPart.Position or Vector3.new())).Magnitude,
+        Status = TargetStatus
+    }
+end
+
+-- Функция для логирования информации о цели
+local function LogTargetInfo(targetInfo)
+    if targetInfo then
+        print(string.format(
+            "Target: %s | Health: %.1f/%.1f | Distance: %.2f studs | Position: (%.2f, %.2f, %.2f) | Status: %s",
+            targetInfo.Name,
+            targetInfo.Health,
+            targetInfo.MaxHealth,
+            targetInfo.Distance,
+            targetInfo.Position.X,
+            targetInfo.Position.Y,
+            targetInfo.Position.Z,
+            targetInfo.Status
+        ))
+    else
+        print("No target information available")
+    end
+end
+
+-- Функция для поиска ближайшего игрока к курсору
+local function GetClosestToMouse()
+    local ClosestTarget, ClosestDistance = nil, math.huge
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            if humanoid and rootPart and humanoid.Health > 0 then
+                local screenPos, onScreen = Camera:WorldToScreenPoint(rootPart.Position)
+                if onScreen then
+                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                    if distance < ClosestDistance then
+                        ClosestDistance = distance
+                        ClosestTarget = player
+                    end
+                end
+            end
+        end
+    end
+    return ClosestTarget
+end
+
+-- Функция для проверки статуса цели
+local function UpdateTargetStatus(deltaTime)
+    if Target and Target.Character and Target.Character:FindFirstChild("Humanoid") then
+        local humanoid = Target.Character.Humanoid
+        local isInAir = humanoid.FloorMaterial == Enum.Material.Air
+
+        if isInAir then
+            TargetAirTime = TargetAirTime + deltaTime
+            if TargetAirTime > Settings.JumpOffset.TimeThreshold then
+                TargetStatus = "Fly"
+            else
+                TargetStatus = "Jumped"
+            end
+        else
+            TargetAirTime = 0
+            TargetStatus = "Ground"
+        end
+    else
+        TargetAirTime = 0
+        TargetStatus = "Ground"
+    end
+end
+
+-- Функция для получения предсказанной позиции с учетом jump offset
+local function GetPredictedPosition(targetRoot, velocity)
+    local basePos = targetRoot.Position
+    local predictedPos = basePos + velocity * Settings.PredictionFactor
+
+    if TargetStatus == "Jumped" then
+        -- Jump offset: поднимаем точку прицеливания на заданную высоту
+        predictedPos = Vector3.new(predictedPos.X, basePos.Y + Settings.JumpOffset.Height, predictedPos.Z)
+    end
+
+    return predictedPos
+end
+
+-- Инициализация и управление TargetStats UI
+local function InitializeTargetStats()
+    local stats = {
+        ScreenGui = nil,
+        MainFrame = nil,
+        HealthBar = nil,
+        ArmorBar = nil,
+        NameLabel = nil,
+        AvatarImage = nil,
+        PositionLabel = nil,
+        HealthText = nil,
+        ArmorText = nil,
+        DamageParticles = nil,
+        IsDragging = false,
+        LastMousePos = nil,
+        Tweens = {},
+        Connections = {},
+        LastHealth = nil,
+        LastArmor = nil,
+        HealthConnection = nil,
+        ArmorConnection = nil
+    }
+
+    -- Создаем ScreenGui
+    stats.ScreenGui = Instance.new("ScreenGui")
+    stats.ScreenGui.Name = "TargetStatsGui"
+    stats.ScreenGui.ResetOnSpawn = false
+    stats.ScreenGui.IgnoreGuiInset = true
+    stats.ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+    -- Основной фрейм
+    stats.MainFrame = Instance.new("Frame")
+    stats.MainFrame.Size = Settings.TargetStats.FrameSize
+    stats.MainFrame.Position = UDim2.new(0.5, -150, 0.5, -60)
+    stats.MainFrame.BackgroundColor3 = Settings.TargetStats.BackgroundColor
+    stats.MainFrame.BackgroundTransparency = Settings.TargetStats.BackgroundTransparency
+    stats.MainFrame.BorderSizePixel = 0
+    stats.MainFrame.Visible = false
+    stats.MainFrame.Parent = stats.ScreenGui
+
+    -- UICorner
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = stats.MainFrame
+
+    -- Градиентный бордер с эффектом свечения
+    local borderFrame = Instance.new("Frame")
+    borderFrame.Size = UDim2.new(1, 6, 1, 6)
+    borderFrame.Position = UDim2.new(0, -3, 0, -3)
+    borderFrame.BackgroundTransparency = 0
+    borderFrame.BorderSizePixel = 0
+    borderFrame.Parent = stats.MainFrame
+
+    local borderGradient = Instance.new("UIGradient")
+    borderGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 105, 180)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 0))
+    })
+    borderGradient.Rotation = 45
+    borderGradient.Parent = borderFrame
+
+    local innerFrame = Instance.new("Frame")
+    innerFrame.Size = UDim2.new(1, -6, 1, -6)
+    innerFrame.Position = UDim2.new(0, 3, 0, 3)
+    innerFrame.BackgroundColor3 = Settings.TargetStats.BackgroundColor
+    innerFrame.BackgroundTransparency = Settings.TargetStats.BackgroundTransparency
+    innerFrame.BorderSizePixel = 0
+    innerFrame.Parent = borderFrame
+
+    local innerCorner = Instance.new("UICorner")
+    innerCorner.CornerRadius = UDim.new(0, 8)
+    innerCorner.Parent = innerFrame
+
+    -- Аватар игрока
+    stats.AvatarImage = Instance.new("ImageLabel")
+    stats.AvatarImage.Size = Settings.TargetStats.Avatar.Size
+    stats.AvatarImage.Position = Settings.TargetStats.Avatar.Position
+    stats.AvatarImage.BackgroundTransparency = 1
+    stats.AvatarImage.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+    stats.AvatarImage.ScaleType = Enum.ScaleType.Fit
+    stats.AvatarImage.Parent = stats.MainFrame
+
+    local avatarCorner = Instance.new("UICorner")
+    avatarCorner.CornerRadius = UDim.new(0, 8)
+    avatarCorner.Parent = stats.AvatarImage
+
+    -- Фрейм для HP
+    local healthFrame = Instance.new("Frame")
+    healthFrame.Size = Settings.TargetStats.HealthBar.Size
+    healthFrame.Position = Settings.TargetStats.HealthBar.Position
+    healthFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    healthFrame.BorderSizePixel = 0
+    healthFrame.Parent = stats.MainFrame
+
+    stats.HealthBar = Instance.new("Frame")
+    stats.HealthBar.Size = UDim2.new(1, 0, 1, 0)
+    stats.HealthBar.BackgroundTransparency = 0
+    stats.HealthBar.BorderSizePixel = 0
+    stats.HealthBar.Parent = healthFrame
+
+    local healthCorner = Instance.new("UICorner")
+    healthCorner.CornerRadius = UDim.new(0, 4)
+    healthCorner.Parent = healthFrame
+
+    local healthGradient = Instance.new("UIGradient")
+    healthGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Settings.TargetStats.HealthBar.DarkColor),
+        ColorSequenceKeypoint.new(1, Settings.TargetStats.HealthBar.LightColor)
+    })
+    healthGradient.Rotation = 45
+    healthGradient.Parent = stats.HealthBar
+
+    -- Текст HP
+    stats.HealthText = Instance.new("TextLabel")
+    stats.HealthText.Size = UDim2.new(1, 0, 1, 0)
+    stats.HealthText.Position = UDim2.new(0, 0, 0, 0)
+    stats.HealthText.BackgroundTransparency = 1
+    stats.HealthText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    stats.HealthText.TextScaled = true
+    stats.HealthText.Font = Enum.Font.GothamBlack
+    stats.HealthText.Text = "100"
+    stats.HealthText.TextStrokeTransparency = 0.5
+    stats.HealthText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    stats.HealthText.Parent = healthFrame
+
+    -- Фрейм для брони
+    local armorFrame = Instance.new("Frame")
+    armorFrame.Size = Settings.TargetStats.ArmorBar.Size
+    armorFrame.Position = Settings.TargetStats.ArmorBar.Position
+    armorFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    armorFrame.BorderSizePixel = 0
+    armorFrame.Parent = stats.MainFrame
+
+    stats.ArmorBar = Instance.new("Frame")
+    stats.ArmorBar.Size = UDim2.new(1, 0, 1, 0)
+    stats.ArmorBar.BackgroundTransparency = 0
+    stats.ArmorBar.BorderSizePixel = 0
+    stats.ArmorBar.Parent = armorFrame
+
+    local armorCorner = Instance.new("UICorner")
+    armorCorner.CornerRadius = UDim.new(0, 4)
+    armorCorner.Parent = armorFrame
+
+    local armorGradient = Instance.new("UIGradient")
+    armorGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Settings.TargetStats.ArmorBar.DarkColor),
+        ColorSequenceKeypoint.new(1, Settings.TargetStats.ArmorBar.LightColor)
+    })
+    armorGradient.Rotation = 45
+    armorGradient.Parent = stats.ArmorBar
+
+    -- Текст Armor
+    stats.ArmorText = Instance.new("TextLabel")
+    stats.ArmorText.Size = UDim2.new(1, 0, 1, 0)
+    stats.ArmorText.Position = UDim2.new(0, 0, 0, 0)
+    stats.ArmorText.BackgroundTransparency = 1
+    stats.ArmorText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    stats.ArmorText.TextScaled = true
+    stats.ArmorText.Font = Enum.Font.GothamBlack
+    stats.ArmorText.Text = "100"
+    stats.ArmorText.TextStrokeTransparency = 0.5
+    stats.ArmorText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    stats.ArmorText.Parent = armorFrame
+
+    -- Текстовая метка для имени
+    stats.NameLabel = Instance.new("TextLabel")
+    stats.NameLabel.Size = UDim2.new(0.65, 0, 0.15, 0)
+    stats.NameLabel.Position = UDim2.new(0.3, 5, 0.05, 0)
+    stats.NameLabel.BackgroundTransparency = 1
+    stats.NameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    stats.NameLabel.TextScaled = true
+    stats.NameLabel.Font = Enum.Font.GothamBlack
+    stats.NameLabel.Text = "No Target"
+    stats.NameLabel.TextStrokeTransparency = 0.5
+    stats.NameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    stats.NameLabel.Parent = stats.MainFrame
+
+    -- Текстовая метка для позиции
+    stats.PositionLabel = Instance.new("TextLabel")
+    stats.PositionLabel.Size = Settings.TargetStats.PositionLabel.Size
+    stats.PositionLabel.Position = Settings.TargetStats.PositionLabel.Position
+    stats.PositionLabel.BackgroundTransparency = 1
+    stats.PositionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    stats.PositionLabel.TextScaled = true
+    stats.PositionLabel.Font = Enum.Font.GothamBlack
+    stats.PositionLabel.Text = "Position: 0, 0, 0"
+    stats.PositionLabel.TextStrokeTransparency = 0.5
+    stats.PositionLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    stats.PositionLabel.Parent = stats.MainFrame
+
+    -- Частицы для эффекта урона
+    stats.DamageParticles = Instance.new("ParticleEmitter")
+    stats.DamageParticles.Color = ColorSequence.new(Settings.TargetStats.DamageParticles.Color)
+    stats.DamageParticles.Size = Settings.TargetStats.DamageParticles.Size
+    stats.DamageParticles.Lifetime = Settings.TargetStats.DamageParticles.Lifetime
+    stats.DamageParticles.Rate = Settings.TargetStats.DamageParticles.Rate
+    stats.DamageParticles.Speed = Settings.TargetStats.DamageParticles.Speed
+    stats.DamageParticles.SpreadAngle = Settings.TargetStats.DamageParticles.SpreadAngle
+    stats.DamageParticles.Enabled = false
+    stats.DamageParticles.Parent = stats.MainFrame
+
+    -- Настройка Drag and Drop
+    local function updateDrag(input)
+        if stats.IsDragging and stats.MainFrame then
+            local mousePos = input.Position
+            local delta = mousePos - stats.LastMousePos
+            local newPos = stats.MainFrame.Position + UDim2.new(0, delta.X, 0, delta.Y)
+
+            -- Ограничение перемещения
+            local screenSize = GuiService:GetScreenResolution()
+            newPos = UDim2.new(
+                math.clamp(newPos.X.Scale, 0, 1 - stats.MainFrame.Size.X.Scale),
+                newPos.X.Offset,
+                math.clamp(newPos.Y.Scale, 0, 1 - stats.MainFrame.Size.Y.Scale),
+                newPos.Y.Offset
+            )
+
+            -- Плавное перемещение
+            local tweenInfo = TweenInfo.new(
+                Settings.TargetStats.Drag.Smoothness,
+                Settings.TargetStats.Animation.EasingStyle,
+                Settings.TargetStats.Animation.EasingDirection
+            )
+            local tween = TweenService:Create(stats.MainFrame, tweenInfo, {Position = newPos})
+            tween:Play()
+            stats.Tweens["Drag"] = tween
+            stats.LastMousePos = mousePos
+        end
+    end
+
+    stats.Connections[#stats.Connections + 1] = stats.MainFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            stats.IsDragging = true
+            stats.LastMousePos = input.Position
+        end
+    end)
+
+    stats.Connections[#stats.Connections + 1] = stats.MainFrame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            stats.IsDragging = false
+        end
+    end)
+
+    stats.Connections[#stats.Connections + 1] = UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            updateDrag(input)
+        end
+    end)
+
+    -- Функция для обновления UI
+    function stats:Update(target, deltaTime)
+        if not self.MainFrame then return end
+
+        if target and target.Character and target.Character:FindFirstChild("Humanoid") then
+            self.MainFrame.Visible = true
+            local humanoid = target.Character.Humanoid
+            local health = humanoid.Health / humanoid.MaxHealth
+
+            -- Получение брони
+            local armorValue = 0
+            local armorObject = workspace:FindFirstChild("Players") and
+                               workspace.Players:FindFirstChild(target.Name) and
+                               workspace.Players[target.Name]:FindFirstChild("BodyEffects") and
+                               workspace.Players[target.Name].BodyEffects:FindFirstChild("Armor")
+            if armorObject then
+                armorValue = armorObject.Value / 100
+            end
+
+            -- Обновление UI
+            local tweenInfo = TweenInfo.new(
+                Settings.TargetStats.Animation.TweenTime,
+                Settings.TargetStats.Animation.EasingStyle,
+                Settings.TargetStats.Animation.EasingDirection
+            )
+
+            -- Health bar
+            if self.Tweens["Health"] then
+                self.Tweens["Health"]:Cancel()
+            end
+            local healthTween = TweenService:Create(
+                self.HealthBar,
+                tweenInfo,
+                {Size = UDim2.new(math.clamp(health, 0, 1), 0, 1, 0)}
+            )
+            healthTween:Play()
+            self.Tweens["Health"] = healthTween
+
+            -- Armor bar
+            if self.Tweens["Armor"] then
+                self.Tweens["Armor"]:Cancel()
+            end
+            local armorTween = TweenService:Create(
+                self.ArmorBar,
+                tweenInfo,
+                {Size = UDim2.new(math.clamp(armorValue, 0, 1), 0, 1, 0)}
+            )
+            armorTween:Play()
+            self.Tweens["Armor"] = armorTween
+
+            -- Обновление текста
+            self.HealthText.Text = tostring(math.floor(humanoid.Health))
+            self.ArmorText.Text = tostring(math.floor(armorObject and armorObject.Value or 0))
+            self.NameLabel.Text = target.Name
+
+            -- Обновление позиции
+            local rootPart = target.Character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                local pos = rootPart.Position
+                self.PositionLabel.Text = string.format("Position: %.1f, %.1f, %.1f", pos.X, pos.Y, pos.Z)
+            end
+
+            -- Обновление аватара
+            local userId = target.UserId
+            self.AvatarImage.Image = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=150&height=150&format=png", userId)
+
+            -- Подписка на события изменения здоровья и брони, если еще не подписаны
+            if not self.HealthConnection and humanoid then
+                self.HealthConnection = humanoid.HealthChanged:Connect(function(newHealth)
+                    local healthFraction = newHealth / humanoid.MaxHealth
+                    if self.Tweens["Health"] then
+                        self.Tweens["Health"]:Cancel()
+                    end
+                    local healthTween = TweenService:Create(
+                        self.HealthBar,
+                        tweenInfo,
+                        {Size = UDim2.new(math.clamp(healthFraction, 0, 1), 0, 1, 0)}
+                    )
+                    healthTween:Play()
+                    self.Tweens["Health"] = healthTween
+                    self.HealthText.Text = tostring(math.floor(newHealth))
+
+                    -- Эффект при получении урона
+                    if self.LastHealth and self.LastHealth > newHealth then
+                        self.DamageParticles.Enabled = true
+                        task.delay(0.5, function()
+                            if self.DamageParticles then
+                                self.DamageParticles.Enabled = false
+                            end
+                        end)
+
+                        -- Анимация изменения цвета бордера
+                        local damageColor = ColorSequence.new({
+                            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+                            ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
+                        })
+                        local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear)
+                        local tween = TweenService:Create(borderGradient, tweenInfo, {Color = damageColor})
+                        tween:Play()
+                        task.delay(0.5, function()
+                            if borderGradient then
+                                borderGradient.Color = ColorSequence.new({
+                                    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 105, 180)),
+                                    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 0))
+                                })
+                            end
+                        end)
+
+                        -- Анимация мигания баров
+                        local flashTweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, 2, true)
+                        local flashTween = TweenService:Create(self.HealthBar, flashTweenInfo, {BackgroundTransparency = 0.5})
+                        flashTween:Play()
+                    end
+                    self.LastHealth = newHealth
+                end)
+            end
+
+            if not self.ArmorConnection and armorObject then
+                self.ArmorConnection = armorObject:GetPropertyChangedSignal("Value"):Connect(function()
+                    local newArmorValue = armorObject.Value / 100
+                    if self.Tweens["Armor"] then
+                        self.Tweens["Armor"]:Cancel()
+                    end
+                    local armorTween = TweenService:Create(
+                        self.ArmorBar,
+                        tweenInfo,
+                        {Size = UDim2.new(math.clamp(newArmorValue, 0, 1), 0, 1, 0)}
+                    )
+                    armorTween:Play()
+                    self.Tweens["Armor"] = armorTween
+                    self.ArmorText.Text = tostring(math.floor(armorObject.Value))
+                    self.LastArmor = armorObject.Value
+                end)
+            end
+        else
+            self.MainFrame.Visible = false
+            self.NameLabel.Text = "No Target"
+            self.AvatarImage.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+            self.PositionLabel.Text = "Position: 0, 0, 0"
+            self.HealthText.Text = "0"
+            self.ArmorText.Text = "0"
+            self.LastHealth = nil
+            self.LastArmor = nil
+
+            -- Отписываемся от событий
+            if self.HealthConnection then
+                self.HealthConnection:Disconnect()
+                self.HealthConnection = nil
+            end
+            if self.ArmorConnection then
+                self.ArmorConnection:Disconnect()
+                self.ArmorConnection = nil
+            end
+        end
+    end
+
+    -- Функция очистки
+    function stats:Destroy()
+        for _, tween in pairs(self.Tweens) do
+            if tween then tween:Cancel() end
+        end
+        for _, conn in pairs(self.Connections) do
+            conn:Disconnect()
+        end
+        if self.HealthConnection then
+            self.HealthConnection:Disconnect()
+            self.HealthConnection = nil
+        end
+        if self.ArmorConnection then
+            self.ArmorConnection:Disconnect()
+            self.ArmorConnection = nil
+        end
+        if self.ScreenGui then
+            self.ScreenGui:Destroy()
+        end
+        self.MainFrame = nil
+        self.HealthBar = nil
+        self.ArmorBar = nil
+        self.NameLabel = nil
+        self.AvatarImage = nil
+        self.PositionLabel = nil
+        self.HealthText = nil
+        self.ArmorText = nil
+        self.DamageParticles = nil
+        self.Tweens = {}
+        self.Connections = {}
+    end
+
+    return stats
+end
+
+-- Обновление трейсера
+local function UpdateTracer(deltaTime)
+    UpdateTargetStatus(deltaTime)
+
+    if Target and Target.Character and Target.Character:FindFirstChild("HumanoidRootPart") and Character and Character:FindFirstChild("HumanoidRootPart") then
+        local localRoot = Character.HumanoidRootPart
+        local targetRoot = Target.Character.HumanoidRootPart
+        local velocity = targetRoot.Velocity
+
+        -- Получаем предсказанную позицию с учетом jump offset
+        local predictedPos = GetPredictedPosition(targetRoot, velocity)
+
+        -- Установка позиции трейсера
+        TracerAttachment0.Parent = localRoot
+        TracerAttachment0.WorldPosition = localRoot.Position
+        TracerAttachment1.Parent = workspace.Terrain
+        TracerAttachment1.WorldPosition = predictedPos
+
+        -- Включение трейсера и эффектов
+        TracerBeam.Enabled = true
+        ParticleEmitter.Enabled = true
+
+        -- Пульсация яркости для эффекта
+        TracerBeam.Brightness = 1 + Settings.Tracer.BrightnessPulse * math.sin(tick() * 5)
+    else
+        TracerBeam.Enabled = false
+        ParticleEmitter.Enabled = false
+    end
+
+    -- Обновление TargetStats каждый кадр
+    if TargetStatsUI then
+        TargetStatsUI:Update(Target, deltaTime)
+    end
+end
+
+-- Выбор цели по нажатию клавиши
+UserInputService.InputBegan:Connect(function(Input, gameProcessedEvent)
+    if gameProcessedEvent then return end
+    if Input.KeyCode == Settings.Keybind then
+        if Target == nil then
+            Target = GetClosestToMouse()
+            if Target then
+                warn("Locked on to: " .. Target.Name)
+                local targetInfo = GetTargetInfo(Target)
+                LogTargetInfo(targetInfo)
+                TracerBeam.Enabled = true
+                ParticleEmitter.Enabled = true
+            else
+                warn("No target found")
+                TracerBeam.Enabled = false
+                ParticleEmitter.Enabled = false
+            end
+        else
+            warn("Unlocked from: " .. Target.Name)
+            Target = nil
+            TracerBeam.Enabled = false
+            ParticleEmitter.Enabled = false
+            TargetAirTime = 0
+            TargetStatus = "Ground"
+        end
+    end
+end)
+
+-- Обработка появления нового персонажа
+local function SetupCharacter(char)
+    Character = char
+    char.ChildAdded:Connect(function(tool)
+        if tool:IsA("Tool") then
+            tool.Activated:Connect(function()
+                if Target and Target.Character and Target.Character:FindFirstChild("HumanoidRootPart") then
+                    local rootPart = Target.Character.HumanoidRootPart
+                    local velocity = rootPart.Velocity
+                    -- Предсказанная позиция с учетом jump offset
+                    local Hit = GetPredictedPosition(rootPart, velocity)
+                    -- Отправка данных серверу
+                    ReplicatedStorage.MainEvent:FireServer("UpdateMousePos", Hit)
+                    -- Логирование информации о цели при активации
+                    local targetInfo = GetTargetInfo(Target)
+                    LogTargetInfo(targetInfo)
+                end
+            end)
+        end
+    end)
+end
+
+-- Инициализация
+InitializeTracer()
+TargetStatsUI = InitializeTargetStats()
+
+-- Подключение к текущему и новым персонажам
+if Character then
+    SetupCharacter(Character)
+end
+LocalPlayer.CharacterAdded:Connect(SetupCharacter)
+
+-- Обновление трейсера в реальном времени
+RunService.RenderStepped:Connect(UpdateTracer)
+
+-- Очистка при отключении
+game:BindToClose(function()
+    if TracerBeam then
+        TracerBeam:Destroy()
+        TracerAttachment0:Destroy()
+        TracerAttachment1:Destroy()
+        ParticleEmitter:Destroy()
+    end
+    if TargetStatsUI then
+        TargetStatsUI:Destroy()
+    end
+end)
