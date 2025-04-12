@@ -1,0 +1,261 @@
+-- Roblox API
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local UserInputService = game:GetService("UserInputService")
+
+-- Создаем ScreenGui для консоли
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "LogConsole"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = PlayerGui
+
+-- Основной фрейм консоли (в стиле Windows 10)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 300, 0, 200)
+mainFrame.Position = UDim2.new(0, 50, 0, 50)
+mainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 48) -- Темно-серый фон Windows 10
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+-- Тень для эффекта "поднятия"
+local shadow = Instance.new("ImageLabel")
+shadow.Size = UDim2.new(1, 20, 1, 20)
+shadow.Position = UDim2.new(0, -10, 0, -10)
+shadow.BackgroundTransparency = 1
+shadow.Image = "rbxassetid://1316045217" -- Тень Roblox
+shadow.ImageColor3 = Color3.fromRGB(0, 0, 0)
+shadow.ImageTransparency = 0.5
+shadow.ScaleType = Enum.ScaleType.Slice
+shadow.SliceCenter = Rect.new(10, 10, 10, 10)
+shadow.Parent = mainFrame
+
+-- Заголовочная панель (Title Bar)
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 30)
+titleBar.BackgroundColor3 = Color3.fromRGB(0, 120, 215) -- Синий цвет Windows 10
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+titleLabel.Position = UDim2.new(0, 10, 0, 0) -- Отступ слева
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "LogConsole"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.TextSize = 14
+titleLabel.Font = Enum.Font.Gotham
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.TextYAlignment = Enum.TextYAlignment.Center
+titleLabel.Parent = titleBar
+
+-- Кнопки управления окном (развернуть/восстановить, закрыть)
+local buttonSize = UDim2.new(0, 45, 0, 30)
+
+local maximizeButton = Instance.new("TextButton")
+maximizeButton.Size = buttonSize
+maximizeButton.Position = UDim2.new(1, -90, 0, 0)
+maximizeButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+maximizeButton.BorderSizePixel = 0
+maximizeButton.Text = "□"
+maximizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+maximizeButton.TextSize = 14
+maximizeButton.Font = Enum.Font.Gotham
+maximizeButton.Parent = titleBar
+
+local closeButton = Instance.new("TextButton")
+closeButton.Size = buttonSize
+closeButton.Position = UDim2.new(1, -45, 0, 0)
+closeButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+closeButton.BorderSizePixel = 0
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextSize = 14
+closeButton.Font = Enum.Font.Gotham
+closeButton.Parent = titleBar
+
+-- Текстовое поле для логов
+local logList = Instance.new("ScrollingFrame")
+logList.Size = UDim2.new(1, -10, 1, -70) -- Учитываем заголовок и футер
+logList.Position = UDim2.new(0, 5, 0, 35)
+logList.BackgroundTransparency = 1
+logList.ScrollBarThickness = 4
+logList.CanvasSize = UDim2.new(0, 0, 0, 0)
+logList.Parent = mainFrame
+
+local logLayout = Instance.new("UIListLayout")
+logLayout.SortOrder = Enum.SortOrder.LayoutOrder
+logLayout.Parent = logList
+
+-- Нижняя панель с версией
+local footer = Instance.new("Frame")
+footer.Size = UDim2.new(1, 0, 0, 30)
+footer.Position = UDim2.new(0, 0, 1, -30)
+footer.BackgroundColor3 = Color3.fromRGB(63, 63, 70) -- Темнее, чем основной фон
+footer.BorderSizePixel = 0
+footer.Parent = mainFrame
+
+local versionLabel = Instance.new("TextLabel")
+versionLabel.Size = UDim2.new(1, 0, 1, 0)
+versionLabel.BackgroundTransparency = 1
+versionLabel.Text = "Console log v3.17"
+versionLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+versionLabel.TextSize = 14
+versionLabel.Font = Enum.Font.Gotham
+versionLabel.Parent = footer
+
+-- Функция для добавления логов с переносом текста
+local function addLog(message: string)
+    local logEntry = Instance.new("TextLabel")
+    logEntry.Size = UDim2.new(1, 0, 0, 20)
+    logEntry.BackgroundTransparency = 1
+    logEntry.Text = message
+    logEntry.TextColor3 = Color3.fromRGB(200, 200, 200)
+    logEntry.TextSize = 14
+    logEntry.Font = Enum.Font.Gotham
+    logEntry.TextXAlignment = Enum.TextXAlignment.Left
+    logEntry.TextWrapped = true
+    logEntry.Parent = logList
+
+    local textBounds = logEntry.TextBounds
+    local lines = math.ceil(textBounds.X / (logList.AbsoluteSize.X - 10))
+    logEntry.Size = UDim2.new(1, 0, 0, math.max(20, lines * 20))
+
+    logList.CanvasSize = UDim2.new(0, 0, 0, logLayout.AbsoluteContentSize.Y)
+end
+
+-- Drag-and-drop (за заголовочную панель) с использованием UserInputService
+local dragging = false
+local dragStart = nil
+local startPos = nil
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- Изменение размера через правый нижний угол основного фрейма
+local resizing = false
+local resizeStart = nil
+local startSize = nil
+
+-- Невидимая зона в правом нижнем углу для изменения размера
+local resizeArea = Instance.new("TextButton")
+resizeArea.Size = UDim2.new(0, 20, 0, 20)
+resizeArea.Position = UDim2.new(1, -20, 1, -20) -- Правый нижний угол
+resizeArea.BackgroundTransparency = 1
+resizeArea.Text = ""
+resizeArea.Parent = mainFrame
+
+-- Визуальная пометка (диагональные линии)
+local resizeIndicator = Instance.new("ImageLabel")
+resizeIndicator.Size = UDim2.new(0, 20, 0, 20)
+resizeIndicator.Position = UDim2.new(1, -20, 1, -20)
+resizeIndicator.BackgroundTransparency = 1
+resizeIndicator.Image = "rbxassetid://6014261993" -- Текстура диагональных линий (Roblox asset)
+resizeIndicator.ImageColor3 = Color3.fromRGB(200, 200, 200)
+resizeIndicator.Parent = mainFrame
+
+resizeArea.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        resizing = true
+        resizeStart = input.Position
+        startSize = mainFrame.Size
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement and resizing then
+        local delta = input.Position - resizeStart
+        -- Движение вправо увеличивает ширину, вниз увеличивает высоту
+        local newWidth = math.max(200, startSize.X.Offset + delta.X)
+        local newHeight = math.max(150, startSize.Y.Offset + delta.Y)
+        mainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
+
+        for _, logEntry in pairs(logList:GetChildren()) do
+            if logEntry:IsA("TextLabel") then
+                local textBounds = logEntry.TextBounds
+                local lines = math.ceil(textBounds.X / (logList.AbsoluteSize.X - 10))
+                logEntry.Size = UDim2.new(1, 0, 0, math.max(20, lines * 20))
+            end
+        end
+        logList.CanvasSize = UDim2.new(0, 0, 0, logLayout.AbsoluteContentSize.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        resizing = false
+    end
+end)
+
+-- Логика для кнопок управления окном
+local isMaximized = false
+local normalSize = mainFrame.Size
+local normalPosition = mainFrame.Position
+
+maximizeButton.MouseButton1Click:Connect(function()
+    if isMaximized then
+        -- Восстановить
+        mainFrame.Size = normalSize
+        mainFrame.Position = normalPosition
+        maximizeButton.Text = "□"
+        isMaximized = false
+    else
+        -- Развернуть
+        normalSize = mainFrame.Size
+        normalPosition = mainFrame.Position
+        mainFrame.Size = UDim2.new(1, 0, 1, 0)
+        mainFrame.Position = UDim2.new(0, 0, 0, 0)
+        maximizeButton.Text = "❐"
+        isMaximized = true
+    end
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+end)
+
+-- Эффекты при наведении на кнопки
+local function applyHoverEffect(button, hoverColor)
+    button.MouseEnter:Connect(function()
+        button.BackgroundColor3 = hoverColor
+    end)
+    button.MouseLeave:Connect(function()
+        button.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+    end)
+end
+
+applyHoverEffect(maximizeButton, Color3.fromRGB(0, 100, 195))
+applyHoverEffect(closeButton, Color3.fromRGB(232, 17, 35))
+
+-- Пример использования
+addLog("Hitlog: [TargetName] [time] [hp]")
+addLog("LocalPlayer:DamageLog: [User] [time] [hp]")
+addLog("TargetHookLog: [target name] [time] [rangetotarget]")
+
+-- Экспортируем функцию для добавления логов
+return {
+    addLog = addLog
+}
