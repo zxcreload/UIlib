@@ -27,8 +27,6 @@ local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local GuiService = game:GetService("GuiService")
-local TweenService = game:GetService("TweenService") -- Добавляем TweenService
-local TextService = game:GetService("TextService") -- Добавляем TextService
 
 -- Local variables
 local LocalPlayer = Players.LocalPlayer
@@ -3478,62 +3476,66 @@ local function createTargetStatsGui()
     end)
     
     function gui:Update(targetPlayer, delta)
-        if not self.MainFrame then return end
-        if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Humanoid") then
-            self.MainFrame.Visible = Settings.TargetStats.Enabled
-            local humanoid = targetPlayer.Character.Humanoid
-            local healthRatio = humanoid.Health / humanoid.MaxHealth
-            local armorRatio = 0
-            local armorInstance = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild(targetPlayer.Name) and
-                                 Workspace.Players[targetPlayer.Name]:FindFirstChild("BodyEffects") and
-                                 Workspace.Players[targetPlayer.Name].BodyEffects:FindFirstChild("Armor")
-            if armorInstance then armorRatio = armorInstance.Value / 100 end
-            local tweenInfo = TweenInfo.new(
-                Settings.TargetStats.Animation.TweenTime,
-                Settings.TargetStats.Animation.EasingStyle,
-                Settings.TargetStats.Animation.EasingDirection
-            )
+    if not self.MainFrame then return end
+    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Humanoid") then
+        self.MainFrame.Visible = Settings.TargetStats.Enabled
+        local humanoid = targetPlayer.Character.Humanoid
+        local healthRatio = humanoid.Health / humanoid.MaxHealth
+        local armorRatio = 0
+        local armorInstance = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild(targetPlayer.Name) and
+                             Workspace.Players[targetPlayer.Name]:FindFirstChild("BodyEffects") and
+                             Workspace.Players[targetPlayer.Name].BodyEffects:FindFirstChild("Armor")
+        if armorInstance then armorRatio = armorInstance.Value / 100 end
+        local tweenInfo = TweenInfo.new(
+            Settings.TargetStats.Animation.TweenTime,
+            Settings.TargetStats.Animation.EasingStyle,
+            Settings.TargetStats.Animation.EasingDirection
+        )
+        if self.HealthBar then
             if self.Tweens["Health"] then
                 self.Tweens["Health"]:Cancel()
             end
             local healthTween = TweenService:Create(self.HealthBar, tweenInfo, {Size = UDim2.new(math.clamp(healthRatio, 0, 1), 0, 1, 0)})
             healthTween:Play()
             self.Tweens["Health"] = healthTween
+        end
+        if self.ArmorBar then
             if self.Tweens["Armor"] then
                 self.Tweens["Armor"]:Cancel()
             end
             local armorTween = TweenService:Create(self.ArmorBar, tweenInfo, {Size = UDim2.new(math.clamp(armorRatio, 0, 1), 0, 1, 0)})
             armorTween:Play()
             self.Tweens["Armor"] = armorTween
-            self.HealthText.Text = tostring(math.floor(humanoid.Health))
-            self.ArmorText.Text = tostring(math.floor(armorInstance and armorInstance.Value or 0))
-            self.NameLabel.Text = targetPlayer.Name
-            local rootPart = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if rootPart then
-                local pos = rootPart.Position
-                self.PositionLabel.Text = string.format("Position: %.1f, %.1f, %.1f", pos.X, pos.Y, pos.Z)
-            end
-            local userId = targetPlayer.UserId
-            self.AvatarImage.Image = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=150&height=150&format=png", userId)
-        else
-            self.MainFrame.Visible = false
-            self.NameLabel.Text = "No Target"
-            self.AvatarImage.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
-            self.PositionLabel.Text = "Position: 0, 0, 0"
-            self.HealthText.Text = "0"
-            self.ArmorText.Text = "0"
-            self.LastHealth = nil
-            self.LastArmor = nil
-            if self.HealthConnection then
-                self.HealthConnection:Disconnect()
-                self.HealthConnection = nil
-            end
-            if self.ArmorConnection then
-                self.ArmorConnection:Disconnect()
-                self.ArmorConnection = nil
-            end
+        end
+        self.HealthText.Text = tostring(math.floor(humanoid.Health))
+        self.ArmorText.Text = tostring(math.floor(armorInstance and armorInstance.Value or 0))
+        self.NameLabel.Text = targetPlayer.Name
+        local rootPart = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            local pos = rootPart.Position
+            self.PositionLabel.Text = string.format("Position: %.1f, %.1f, %.1f", pos.X, pos.Y, pos.Z)
+        end
+        local userId = targetPlayer.UserId
+        self.AvatarImage.Image = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=150&height=150&format=png", userId)
+    else
+        self.MainFrame.Visible = false
+        self.NameLabel.Text = "No Target"
+        self.AvatarImage.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+        self.PositionLabel.Text = "Position: 0, 0, 0"
+        self.HealthText.Text = "0"
+        self.ArmorText.Text = "0"
+        self.LastHealth = nil
+        self.LastArmor = nil
+        if self.HealthConnection then
+            self.HealthConnection:Disconnect()
+            self.HealthConnection = nil
+        end
+        if self.ArmorConnection then
+            self.ArmorConnection:Disconnect()
+            self.ArmorConnection = nil
         end
     end
+end
     
     function gui:Destroy()
         for _, tween in pairs(self.Tweens) do
