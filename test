@@ -3947,17 +3947,5 @@ SaveManager:SetFolder("ClickGUI/settings")
 SaveManager:BuildConfigSection(Tabs["HUD"])
 ThemeManager:ApplyToTab(Tabs["HUD"])
 
--- Setup ThemeManager and SaveManager
-ThemeManager:SetLibrary(Library)
-SaveManager:SetLibrary(Library)
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
-
-ThemeManager:SetFolder("ClickGUI")
-SaveManager:SetFolder("ClickGUI/settings")
-
-SaveManager:BuildConfigSection(Tabs["HUD"])
-ThemeManager:ApplyToTab(Tabs["HUD"])
-
 -- Show the UI
 Library:Toggle(true)
