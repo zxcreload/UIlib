@@ -2819,7 +2819,7 @@ local Settings = {
         }
     },
     ConsoleLogger = {
-        Enabled = true,
+        Enabled = false,
         LogTypes = {Hitlog = true, LocalPlayerDamageLog = true, LocalPlayerArmorLog = true, TargetHookedLog = true}
     }
 }
@@ -3752,7 +3752,9 @@ local function setupCharacter(newCharacter)
                 if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
                     local targetRoot = target.Character.HumanoidRootPart
                     local predictedPos = predictPosition(targetRoot, target.Character.Humanoid)
+                    if ReplicatedStorage:FindFirstChild("MainEvent") then
                     ReplicatedStorage.MainEvent:FireServer("UpdateMousePos", predictedPos)
+                    end
                     local info = getTargetInfo(target)
                     printTargetInfo(info)
                 end
