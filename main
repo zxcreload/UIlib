@@ -3752,7 +3752,12 @@ local function setupCharacter(newCharacter)
                 if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
                     local targetRoot = target.Character.HumanoidRootPart
                     local predictedPos = predictPosition(targetRoot, target.Character.Humanoid)
-                    ReplicatedStorage.MainEvent:FireServer("UpdateMousePos", predictedPos)
+                    local mainEvent = game:GetService("ReplicatedStorage"):FindFirstChild("MainEvent")
+                    if mainEvent then
+                        mainEvent:FireServer("UpdateMousePos", predictedPos)
+                    else
+                        warn("MainEvent not found in ReplicatedStorage. Silent Aim may not work correctly.")
+                    end
                     local info = getTargetInfo(target)
                     printTargetInfo(info)
                 end
