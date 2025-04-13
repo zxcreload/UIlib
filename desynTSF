@@ -1,0 +1,305 @@
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+local Char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HRP = Char:WaitForChild("HumanoidRootPart")
+local Humanoid = Char:WaitForChild("Humanoid")
+local Camera = Workspace.CurrentCamera
+
+-- Настройки призрака
+local GhostSettings = {
+    TorsoSize = Vector3.new(2, 2, 1),
+    HeadSize = Vector3.new(1, 1, 1),
+    LimbSize = Vector3.new(1, 2, 1),
+    Transparency = 0.1,
+    PartColor = BrickColor.new("Light blue"),
+    Material = Enum.Material.ForceField,
+    HighlightFillColor = Color3.fromRGB(0, 170, 255),
+    HighlightOutlineColor = Color3.fromRGB(0, 255, 255),
+    HighlightFillTransparency = 0.8,
+    HighlightOutlineTransparency = 0
+}
+
+-- Настройки Targetstrafe
+local StrafeSettings = {
+    TargetPlayerName = "ADFAFFEEQQ", -- Имя цели
+    StrafeMode = "Upwoake", -- Режимы: "Custom", "Random" или "Upwoake"
+    StrafeRadius = 10, -- Радиус круга (в студах)
+    MinStrafeRadius = 5, -- Минимальная дистанция от цели (только для Random)
+    SecondsPerRotation = 2, -- Время на полный круг (360°) для Custom
+    YOffset = 0, -- Смещение по Y для Custom/Random
+    UpwoakeHeight = 5, -- Высота полусферы для Upwoake
+    UpwoakeRadius = 8, -- Радиус полусферы для Upwoake
+    UpwoakeYSpeed = 10, -- Скорость движения по Y для Upwoake
+    DesyncInterval = 0.0001 -- Частота десинхронизации (секунды)
+}
+
+-- Переменные для режимов
+local customStrafeAngle = 0 -- Угол для Custom
+local upwoakeAngle = 0 -- Угол для Upwoake
+local upwoakeYOffset = 0 -- Текущее смещение по Y для Upwoake
+local upwoakeYDirection = 1 -- Направление движения по Y (1 или -1)
+local accumulatedTime = 0 -- Накопленное время для десинхронизации
+
+-- Рассчитываем скорость для Custom
+local StrafeSpeed = (2 * math.pi) / StrafeSettings.SecondsPerRotation
+
+local teleportRandomConnection = nil
+local followPart = nil
+local ghostModel = nil
+
+-- Создание FollowPart для камеры
+local function createFollowPart()
+    local part = Instance.new("Part")
+    part.Name = "FollowPart"
+    part.Anchored = true
+    part.CanCollide = false
+    part.Transparency = 1
+    part.Size = Vector3.new(0.1, 0.1, 0.1)
+    part.Parent = Workspace
+    return part
+end
+
+-- Обновление FollowPart при смене персонажа
+local function setupFollowPart(character)
+    if followPart then
+        followPart:Destroy()
+    end
+    followPart = createFollowPart()
+end
+
+-- Создание модели призрака
+local function createGhost()
+    local model = Instance.new("Model")
+    model.Name = "GhostModel"
+    model.Parent = Workspace
+
+    local torso = Instance.new("Part")
+    torso.Name = "Torso"
+    torso.Size = GhostSettings.TorsoSize
+    torso.Position = Vector3.new(0, 5, 0)
+    torso.Anchored = true
+    torso.CanCollide = false
+    torso.Transparency = GhostSettings.Transparency
+    torso.BrickColor = GhostSettings.PartColor
+    torso.Material = GhostSettings.Material
+    torso.Parent = model
+
+    local head = Instance.new("Part")
+    head.Name = "Head"
+    head.Size = GhostSettings.HeadSize
+    head.Position = torso.Position + Vector3.new(0, 1.5, 0)
+    head.Anchored = true
+    head.CanCollide = false
+    head.Transparency = GhostSettings.Transparency
+    head.BrickColor = GhostSettings.PartColor
+    head.Material = GhostSettings.Material
+    head.Parent = model
+
+    local leftArm = Instance.new("Part")
+    leftArm.Name = "LeftArm"
+    leftArm.Size = GhostSettings.LimbSize
+    leftArm.Position = torso.Position + Vector3.new(-1.5, 0, 0)
+    leftArm.Anchored = true
+    leftArm.CanCollide = false
+    leftArm.Transparency = GhostSettings.Transparency
+    leftArm.BrickColor = GhostSettings.PartColor
+    leftArm.Material = GhostSettings.Material
+    leftArm.Parent = model
+
+    local rightArm = Instance.new("Part")
+    rightArm.Name = "RightArm"
+    rightArm.Size = GhostSettings.LimbSize
+    rightArm.Position = torso.Position + Vector3.new(1.5, 0, 0)
+    rightArm.Anchored = true
+    rightArm.CanCollide = false
+    rightArm.Transparency = GhostSettings.Transparency
+    rightArm.BrickColor = GhostSettings.PartColor
+    rightArm.Material = GhostSettings.Material
+    rightArm.Parent = model
+
+    local leftLeg = Instance.new("Part")
+    leftLeg.Name = "LeftLeg"
+    leftLeg.Size = GhostSettings.LimbSize
+    leftLeg.Position = torso.Position + Vector3.new(-0.5, -2, 0)
+    leftLeg.Anchored = true
+    leftLeg.CanCollide = false
+    leftLeg.Transparency = GhostSettings.Transparency
+    leftLeg.BrickColor = GhostSettings.PartColor
+    leftLeg.Material = GhostSettings.Material
+    leftLeg.Parent = model
+
+    local rightLeg = Instance.new("Part")
+    rightLeg.Name = "RightLeg"
+    rightLeg.Size = GhostSettings.LimbSize
+    rightLeg.Position = torso.Position + Vector3.new(0.5, -2, 0)
+    rightLeg.Anchored = true
+    rightLeg.CanCollide = false
+    rightLeg.Transparency = GhostSettings.Transparency
+    rightLeg.BrickColor = GhostSettings.PartColor
+    rightLeg.Material = GhostSettings.Material
+    rightLeg.Parent = model
+
+    model.PrimaryPart = torso
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "GhostHighlight"
+    highlight.FillTransparency = GhostSettings.HighlightFillTransparency
+    highlight.OutlineTransparency = GhostSettings.HighlightOutlineTransparency
+    highlight.FillColor = GhostSettings.HighlightFillColor
+    highlight.OutlineColor = GhostSettings.HighlightOutlineColor
+    highlight.Parent = model
+
+    return model
+end
+
+-- Обновление призрака при смене персонажа
+local function setupGhost(character)
+    if ghostModel then
+        ghostModel:Destroy()
+    end
+    ghostModel = createGhost()
+end
+
+local function TpToPos(deltaTime)
+    if not Char or not HRP or not Humanoid or not Camera or not followPart or not ghostModel then
+        print("Отсутствуют необходимые компоненты")
+        return
+    end
+    
+    local originalCFrame = HRP.CFrame
+    local targetPlayer = Players:FindFirstChild(StrafeSettings.TargetPlayerName)
+    local targetHRP = targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local newCFrame
+
+    if targetHRP then
+        if StrafeSettings.StrafeMode == "Custom" then
+            -- Режим Custom: плавное вращение по кругу
+            customStrafeAngle = customStrafeAngle + (StrafeSpeed * deltaTime)
+            local offsetX = math.cos(customStrafeAngle) * StrafeSettings.StrafeRadius
+            local offsetZ = math.sin(customStrafeAngle) * StrafeSettings.StrafeRadius
+            local position = targetHRP.Position + Vector3.new(offsetX, StrafeSettings.YOffset, offsetZ)
+            newCFrame = CFrame.new(position, targetHRP.Position)
+            
+        elseif StrafeSettings.StrafeMode == "Random" then
+            -- Режим Random: случайная позиция в кольце
+            local randomAngle = math.random() * 2 * math.pi
+            local randomDistance = math.random(StrafeSettings.MinStrafeRadius, StrafeSettings.StrafeRadius)
+            local offsetX = math.cos(randomAngle) * randomDistance
+            local offsetZ = math.sin(randomAngle) * randomDistance
+            local position = targetHRP.Position + Vector3.new(offsetX, StrafeSettings.YOffset, offsetZ)
+            newCFrame = CFrame.new(position, targetHRP.Position)
+            
+        elseif StrafeSettings.StrafeMode == "Upwoake" then
+            -- Режим Upwoake: движение в верхней полусфере
+            upwoakeAngle = upwoakeAngle + (StrafeSpeed * deltaTime)
+            
+            -- Изменяем высоту с плавным переходом вверх-вниз
+            upwoakeYOffset = upwoakeYOffset + (StrafeSettings.UpwoakeYSpeed * deltaTime * upwoakeYDirection)
+            
+            -- Меняем направление, если достигли границ
+            if upwoakeYOffset > StrafeSettings.UpwoakeHeight then
+                upwoakeYOffset = StrafeSettings.UpwoakeHeight
+                upwoakeYDirection = -1
+            elseif upwoakeYOffset < 0 then
+                upwoakeYOffset = 0
+                upwoakeYDirection = 1
+            end
+            
+            -- Рассчитываем позицию на полусфере
+            local radius = StrafeSettings.UpwoakeRadius * math.sqrt(1 - (upwoakeYOffset/StrafeSettings.UpwoakeHeight)^2)
+            local offsetX = math.cos(upwoakeAngle) * radius
+            local offsetZ = math.sin(upwoakeAngle) * radius
+            local position = targetHRP.Position + Vector3.new(offsetX, upwoakeYOffset, offsetZ)
+            newCFrame = CFrame.new(position, targetHRP.Position)
+        end
+    else
+        -- Если цель не найдена
+        print("Цель не найдена, используем случайный десинк")
+        local offsetX = math.random(-10, 10)
+        local offsetZ = math.random(-10, 10)
+        newCFrame = originalCFrame + Vector3.new(offsetX, 0, offsetZ)
+    end
+
+    -- Настраиваем камеру
+    followPart.CFrame = originalCFrame + Vector3.new(0, 1.5, 0)
+    Camera.CameraSubject = followPart
+
+    -- Применяем десинхронизацию
+    if ghostModel and ghostModel.PrimaryPart then
+        ghostModel:SetPrimaryPartCFrame(newCFrame)
+        HRP.CFrame = newCFrame
+        RunService.RenderStepped:Wait()
+        HRP.CFrame = originalCFrame
+    else
+        print("Отсутствует модель призрака или его основная часть")
+    end
+
+    -- Возвращаем камеру к персонажу
+    Camera.CameraSubject = Humanoid
+end
+
+local function ToggleRandomTeleport()
+    if teleportRandomConnection then
+        teleportRandomConnection:Disconnect()
+        teleportRandomConnection = nil
+        if followPart then
+            followPart:Destroy()
+            followPart = nil
+        end
+        if ghostModel then
+            ghostModel:Destroy()
+            ghostModel = nil
+        end
+        print("Десинхронизация отключена")
+    else
+        setupFollowPart(Char)
+        setupGhost(Char)
+        accumulatedTime = 0
+        upwoakeYOffset = 0 -- Сбрасываем смещение для Upwoake
+        teleportRandomConnection = RunService.Heartbeat:Connect(function(deltaTime)
+            if HRP.Velocity.Magnitude > 0 then
+                accumulatedTime = accumulatedTime + deltaTime
+                if accumulatedTime >= StrafeSettings.DesyncInterval then
+                    TpToPos(deltaTime)
+                    accumulatedTime = accumulatedTime - StrafeSettings.DesyncInterval
+                end
+            end
+        end)
+        print("Десинхронизация включена в режиме: "..StrafeSettings.StrafeMode)
+    end
+end
+
+-- Обработчик появления нового персонажа
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    Char = newCharacter
+    HRP = Char:WaitForChild("HumanoidRootPart")
+    Humanoid = Char:WaitForChild("Humanoid")
+    if teleportRandomConnection then
+        setupFollowPart(newCharacter)
+        setupGhost(newCharacter)
+    end
+end)
+
+-- Инициализация
+if Char then
+    setupFollowPart(Char)
+    setupGhost(Char)
+end
+
+ToggleRandomTeleport()
+
+-- Команда для смены режима в чате (опционально)
+LocalPlayer.Chatted:Connect(function(message)
+    if message:lower() == "/mode custom" then
+        StrafeSettings.StrafeMode = "Custom"
+        print("Режим изменен на Custom")
+    elseif message:lower() == "/mode random" then
+        StrafeSettings.StrafeMode = "Random"
+        print("Режим изменен на Random")
+    elseif message:lower() == "/mode upwoake" then
+        StrafeSettings.StrafeMode = "Upwoake"
+        print("Режим изменен на Upwoake")
+    end
+end)
