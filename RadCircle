@@ -1,0 +1,76 @@
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Параметры
+local CIRCLE_RADIUS = 7 -- Базовый радиус для пульсаций
+local PULSE_COUNT = 3 -- Количество пульсаций
+local PULSE_SEGMENTS = 35 -- Увеличено для плавности
+
+-- Пульсации
+local pulseLines = {}
+for p = 1, PULSE_COUNT do
+    pulseLines[p] = {}
+    for i = 1, PULSE_SEGMENTS do
+        local line = Drawing.new("Line")
+        line.Visible = true
+        line.Color = Color3.fromRGB(0, 255, 255)
+        line.Thickness = 1.5 -- Увеличена толщина линий
+        line.Transparency = 0.7 -- Базовая прозрачность для более мягкого эффекта
+        pulseLines[p][i] = line
+    end
+end
+
+-- Основной цикл
+local time = 0
+RunService.RenderStepped:Connect(function(delta)
+    time = time + delta
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+
+    local rootPart = character.HumanoidRootPart
+    local camera = workspace.CurrentCamera
+
+    -- Обновляем пульсации
+    for p = 1, PULSE_COUNT do
+        local pulseTime = time + (p / PULSE_COUNT) * 2
+        local pulseRadius = CIRCLE_RADIUS + math.sin(pulseTime) * 2
+
+        for i = 1, PULSE_SEGMENTS do
+            local angle = (i / PULSE_SEGMENTS) * (2 * math.pi) -- Замкнутый круг
+            local nextAngle = ((i % PULSE_SEGMENTS + 1) / PULSE_SEGMENTS) * (2 * math.pi) -- Плавное соединение
+
+            local pos1 = rootPart.Position + Vector3.new(
+                math.cos(angle) * pulseRadius,
+                math.sin(pulseTime * 3 + i * 0.2) * 0.5, -- Эффект графика
+                math.sin(angle) * pulseRadius
+            )
+            local pos2 = rootPart.Position + Vector3.new(
+                math.cos(nextAngle) * pulseRadius,
+                math.sin(pulseTime * 3 + (i % PULSE_SEGMENTS + 1) * 0.2) * 0.5,
+                math.sin(nextAngle) * pulseRadius
+            )
+
+            local screenPos1, visible1 = camera:WorldToViewportPoint(pos1)
+            local screenPos2, visible2 = camera:WorldToViewportPoint(pos2)
+
+            local line = pulseLines[p][i]
+            line.Visible = visible1 and visible2
+
+            if line.Visible then
+                line.From = Vector2.new(screenPos1.X, screenPos1.Y)
+                line.To = Vector2.new(screenPos2.X, screenPos2.Y)
+                line.Transparency = 0.7 * (1 - (pulseTime % 2) / 2) -- Более плавное затухание
+            end
+        end
+    end
+end)
+
+-- Очистка
+LocalPlayer.CharacterRemoving:Connect(function()
+    for _, pulse in ipairs(pulseLines) do
+        for _, line in ipairs(pulse) do
+            line:Remove()
+        end
+    end
+end)
