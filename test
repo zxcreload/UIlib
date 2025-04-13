@@ -2759,14 +2759,15 @@ if Char then
     setupGhost(Char)
 end
 
--- Глобальные настройки Silent Aim
-getgenv().SilentAimSettings = {
+-- Настройки Silent Aim
+local Settings = {
     Enabled = false,
     Keybind = Enum.KeyCode.V,
     PredictionFactor = 0.141245121,
     PredictionMode = "Velocity",
-    JumpOffset = { Height = 2 },
+    JumpOffset = {Height = 2}, -- TimeThreshold исключён по запросу
     Tracer = {
+        Enabled = true,
         Color = Color3.fromRGB(255, 50, 50),
         FadeColor = Color3.fromRGB(255, 150, 150),
         Width0 = 0.2,
@@ -2786,10 +2787,11 @@ getgenv().SilentAimSettings = {
         SpreadAngle = Vector2.new(-30, 30)
     },
     TargetStats = {
+        Enabled = true,
         FrameSize = UDim2.new(0, 300, 0, 120),
         BackgroundColor = Color3.fromRGB(15, 15, 15),
         BackgroundTransparency = 0.3,
-        GradientColors = { Start = Color3.fromRGB(255, 105, 180), End = Color3.fromRGB(255, 255, 0) },
+        GradientColors = {Start = Color3.fromRGB(255, 105, 180), End = Color3.fromRGB(255, 255, 0)},
         HealthBar = {
             DarkColor = Color3.fromRGB(200, 0, 0),
             LightColor = Color3.fromRGB(255, 69, 0),
@@ -2802,10 +2804,10 @@ getgenv().SilentAimSettings = {
             Size = UDim2.new(0.65, 0, 0.15, 0),
             Position = UDim2.new(0.3, 5, 0.55, 0)
         },
-        Avatar = { Size = UDim2.new(0.25, 0, 0.5, 0), Position = UDim2.new(0.03, 0, 0.25, 0) },
-        PositionLabel = { Size = UDim2.new(0.65, 0, 0.15, 0), Position = UDim2.new(0.3, 5, 0.75, 0) },
-        Animation = { TweenTime = 0.3, EasingStyle = Enum.EasingStyle.Quad, EasingDirection = Enum.EasingDirection.Out },
-        Drag = { Sensitivity = 2, Smoothness = 0.015 },
+        Avatar = {Size = UDim2.new(0.25, 0, 0.5, 0), Position = UDim2.new(0.03, 0, 0.25, 0)},
+        PositionLabel = {Size = UDim2.new(0.65, 0, 0.15, 0), Position = UDim2.new(0.3, 5, 0.75, 0)},
+        Animation = {TweenTime = 0.3, EasingStyle = Enum.EasingStyle.Quad, EasingDirection = Enum.EasingDirection.Out},
+        Drag = {Sensitivity = 2, Smoothness = 0.015},
         DamageParticles = {
             Color = Color3.fromRGB(255, 50, 50),
             Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 0)}),
@@ -2816,401 +2818,31 @@ getgenv().SilentAimSettings = {
         }
     },
     ConsoleLogger = {
-        EnabledOnStart = true,
-        LogTypes = { Hitlog = true, LocalPlayerDamageLog = true, LocalPlayerArmorLog = true, TargetHookedLog = true }
+        Enabled = true,
+        LogTypes = {Hitlog = true, LocalPlayerDamageLog = true, LocalPlayerArmorLog = true, TargetHookedLog = true}
     }
 }
 
--- Создание группы и Tabbox для Silent Aim
-local SilentAimGroup = Tabs.Combat:AddRightGroupbox("Silent Aim")
-local SilentAimTabbox = SilentAimGroup:AddTabbox()
-
--- Вкладка для технических настроек
-local AimSettingsTab = SilentAimTabbox:AddTab("Aim Settings")
-
--- Включение Silent Aim
-AimSettingsTab:AddToggle("SilentAimEnabled", {
-    Text = "Enable Silent Aim",
-    Default = getgenv().SilentAimSettings.Enabled,
-    Tooltip = "Enable/Disable Silent Aim",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Enabled = Value
-    end
-})
-
--- Клавиша активации
-AimSettingsTab:AddToggle("SilentAimEnabled"):AddKeyPicker("SilentAimKeybind", {
-    Default = getgenv().SilentAimSettings.Keybind.Name,
-    Mode = "Toggle",
-    Text = "Silent Aim Key",
-    NoUI = false,
-    Callback = function(Value) end,
-    ChangedCallback = function(NewKey)
-        getgenv().SilentAimSettings.Keybind = NewKey
-    end
-})
-
--- Режим предсказания
-AimSettingsTab:AddDropdown("PredictionMode", {
-    Values = { "Velocity", "MoveDirection", "CalculateCFrame" },
-    Default = getgenv().SilentAimSettings.PredictionMode,
-    Multi = false,
-    Text = "Prediction Mode",
-    Tooltip = "Select prediction mode",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.PredictionMode = Value
-    end
-})
-
--- Фактор предсказания
-AimSettingsTab:AddInput("PredictionFactor", {
-    Default = tostring(getgenv().SilentAimSettings.PredictionFactor),
-    Numeric = true,
-    Finished = true,
-    Text = "Prediction Factor",
-    Tooltip = "Set prediction factor (0.01-1)",
-    Placeholder = "Enter factor...",
-    Callback = function(Value)
-        local numValue = tonumber(Value)
-        if numValue and numValue >= 0.01 and numValue <= 1 then
-            getgenv().SilentAimSettings.PredictionFactor = numValue
-            Library:Notify({ Title = "Silent Aim", Description = "Prediction Factor set to " .. numValue, Time = 2 })
-        else
-            Library:Notify({ Title = "Error", Description = "Invalid Prediction Factor (0.01-1)", Time = 2 })
-        end
-    end
-})
-
--- Высота прыжка
-AimSettingsTab:AddInput("JumpOffsetHeight", {
-    Default = tostring(getgenv().SilentAimSettings.JumpOffset.Height),
-    Numeric = true,
-    Finished = true,
-    Text = "Jump Offset Height",
-    Tooltip = "Set jump offset height (0-10)",
-    Placeholder = "Enter height...",
-    Callback = function(Value)
-        local numValue = tonumber(Value)
-        if numValue and numValue >= 0 and numValue <= 10 then
-            getgenv().SilentAimSettings.JumpOffset.Height = numValue
-            Library:Notify({ Title = "Silent Aim", Description = "Jump Offset Height set to " .. numValue, Time = 2 })
-        else
-            Library:Notify({ Title = "Error", Description = "Invalid Jump Offset Height (0-10)", Time = 2 })
-        end
-    end
-})
-
--- Включение консоли
-AimSettingsTab:AddToggle("ConsoleEnabled", {
-    Text = "Enable Console",
-    Default = getgenv().SilentAimSettings.ConsoleLogger.EnabledOnStart,
-    Tooltip = "Show console on start",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.ConsoleLogger.EnabledOnStart = Value
-        if v67 then v67.setVisible(Value) end
-    end
-})
-
--- Типы логов консоли
-AimSettingsTab:AddToggle("LogHitlog", {
-    Text = "Hitlog",
-    Default = getgenv().SilentAimSettings.ConsoleLogger.LogTypes.Hitlog,
-    Tooltip = "Log hits on target",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.ConsoleLogger.LogTypes.Hitlog = Value
-    end
-})
-
-AimSettingsTab:AddToggle("LogLocalPlayerDamage", {
-    Text = "Local Player Damage Log",
-    Default = getgenv().SilentAimSettings.ConsoleLogger.LogTypes.LocalPlayerDamageLog,
-    Tooltip = "Log local player damage",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.ConsoleLogger.LogTypes.LocalPlayerDamageLog = Value
-    end
-})
-
-AimSettingsTab:AddToggle("LogLocalPlayerArmor", {
-    Text = "Local Player Armor Log",
-    Default = getgenv().SilentAimSettings.ConsoleLogger.LogTypes.LocalPlayerArmorLog,
-    Tooltip = "Log local player armor changes",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.ConsoleLogger.LogTypes.LocalPlayerArmorLog = Value
-    end
-})
-
-AimSettingsTab:AddToggle("LogTargetHooked", {
-    Text = "Target Hooked Log",
-    Default = getgenv().SilentAimSettings.ConsoleLogger.LogTypes.TargetHookedLog,
-    Tooltip = "Log target lock/unlock",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.ConsoleLogger.LogTypes.TargetHookedLog = Value
-    end
-})
-
--- Вкладка для визуальных настроек
-local VisualSettingsTab = SilentAimTabbox:AddTab("Visual Settings")
-
--- Цвет трассера
-VisualSettingsTab:AddLabel("Tracer Settings"):AddColorPicker("TracerColor", {
-    Default = getgenv().SilentAimSettings.Tracer.Color,
-    Title = "Tracer Color",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Tracer.Color = Value
-    end
-})
-
--- Цвет затухания трассера
-VisualSettingsTab:AddColorPicker("TracerFadeColor", {
-    Default = getgenv().SilentAimSettings.Tracer.FadeColor,
-    Title = "Tracer Fade Color",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Tracer.FadeColor = Value
-    end
-})
-
--- Ширина трассера в начале
-VisualSettingsTab:AddSlider("TracerWidth0", {
-    Text = "Tracer Width Start",
-    Default = getgenv().SilentAimSettings.Tracer.Width0,
-    Min = 0.1,
-    Max = 2,
-    Rounding = 2,
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Tracer.Width0 = Value
-    end
-})
-
--- Ширина трассера в конце
-VisualSettingsTab:AddSlider("TracerWidth1", {
-    Text = "Tracer Width End",
-    Default = getgenv().SilentAimSettings.Tracer.Width1,
-    Min = 0.1,
-    Max = 2,
-    Rounding = 2,
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Tracer.Width1 = Value
-    end
-})
-
--- Текстура трассера
-VisualSettingsTab:AddInput("TracerTexture", {
-    Default = getgenv().SilentAimSettings.Tracer.Texture,
-    Numeric = false,
-    Finished = true,
-    Text = "Tracer Texture",
-    Tooltip = "Set tracer texture ID",
-    Placeholder = "Enter texture ID...",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Tracer.Texture = Value
-    end
-})
-
--- Скорость текстуры
-VisualSettingsTab:AddSlider("TracerTextureSpeed", {
-    Text = "Tracer Texture Speed",
-    Default = getgenv().SilentAimSettings.Tracer.TextureSpeed,
-    Min = 0,
-    Max = 10,
-    Rounding = 1,
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Tracer.TextureSpeed = Value
-    end
-})
-
--- Светимость трассера
-VisualSettingsTab:AddSlider("TracerLightEmission", {
-    Text = "Tracer Light Emission",
-    Default = getgenv().SilentAimSettings.Tracer.LightEmission,
-    Min = 0,
-    Max = 1,
-    Rounding = 2,
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Tracer.LightEmission = Value
-    end
-})
-
--- Влияние света
-VisualSettingsTab:AddSlider("TracerLightInfluence", {
-    Text = "Tracer Light Influence",
-    Default = getgenv().SilentAimSettings.Tracer.LightInfluence,
-    Min = 0,
-    Max = 1,
-    Rounding = 2,
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Tracer.LightInfluence = Value
-    end
-})
-
--- Пульсация яркости
-VisualSettingsTab:AddSlider("TracerBrightnessPulse", {
-    Text = "Tracer Brightness Pulse",
-    Default = getgenv().SilentAimSettings.Tracer.BrightnessPulse,
-    Min = 0,
-    Max = 1,
-    Rounding = 2,
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Tracer.BrightnessPulse = Value
-    end
-})
-
--- Цвет частиц
-VisualSettingsTab:AddLabel("Particle Settings"):AddColorPicker("ParticlesColor", {
-    Default = getgenv().SilentAimSettings.Particles.Color,
-    Title = "Particles Color",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Particles.Color = Value
-    end
-})
-
--- Скорость частиц
-VisualSettingsTab:AddSlider("ParticlesSpeed", {
-    Text = "Particles Speed",
-    Default = getgenv().SilentAimSettings.Particles.Speed.Min,
-    Min = 0,
-    Max = 10,
-    Rounding = 1,
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Particles.Speed = NumberRange.new(Value, Value + 3)
-    end
-})
-
--- Угол разброса частиц
-VisualSettingsTab:AddSlider("ParticlesSpreadAngle", {
-    Text = "Particles Spread Angle",
-    Default = getgenv().SilentAimSettings.Particles.SpreadAngle.X,
-    Min = -90,
-    Max = 90,
-    Rounding = 0,
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Particles.SpreadAngle = Vector2.new(Value, Value)
-    end
-})
-
--- Частота частиц
-VisualSettingsTab:AddSlider("ParticlesRate", {
-    Text = "Particles Rate",
-    Default = getgenv().SilentAimSettings.Particles.Rate,
-    Min = 10,
-    Max = 100,
-    Rounding = 0,
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Particles.Rate = Value
-    end
-})
-
--- Время жизни частиц
-VisualSettingsTab:AddSlider("ParticlesLifetime", {
-    Text = "Particles Lifetime",
-    Default = getgenv().SilentAimSettings.Particles.Lifetime.Min,
-    Min = 0.1,
-    Max = 2,
-    Rounding = 1,
-    Callback = function(Value)
-        getgenv().SilentAimSettings.Particles.Lifetime = NumberRange.new(Value, Value + 0.2)
-    end
-})
-
--- Цвет панели статистики
-VisualSettingsTab:AddLabel("Target Stats Settings"):AddColorPicker("TargetStatsBackgroundColor", {
-    Default = getgenv().SilentAimSettings.TargetStats.BackgroundColor,
-    Title = "Stats Background Color",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.TargetStats.BackgroundColor = Value
-    end
-})
-
--- Прозрачность панели
-VisualSettingsTab:AddSlider("TargetStatsTransparency", {
-    Text = "Stats Background Transparency",
-    Default = getgenv().SilentAimSettings.TargetStats.BackgroundTransparency,
-    Min = 0,
-    Max = 1,
-    Rounding = 2,
-    Callback = function(Value)
-        getgenv().SilentAimSettings.TargetStats.BackgroundTransparency = Value
-    end
-})
-
--- Начальный цвет градиента
-VisualSettingsTab:AddColorPicker("GradientStartColor", {
-    Default = getgenv().SilentAimSettings.TargetStats.GradientColors.Start,
-    Title = "Gradient Start Color",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.TargetStats.GradientColors.Start = Value
-    end
-})
-
--- Конечный цвет градиента
-VisualSettingsTab:AddColorPicker("GradientEndColor", {
-    Default = getgenv().SilentAimSettings.TargetStats.GradientColors.End,
-    Title = "Gradient End Color",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.TargetStats.GradientColors.End = Value
-    end
-})
-
--- Темный цвет полосы здоровья
-VisualSettingsTab:AddColorPicker("HealthBarDarkColor", {
-    Default = getgenv().SilentAimSettings.TargetStats.HealthBar.DarkColor,
-    Title = "Health Bar Dark Color",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.TargetStats.HealthBar.DarkColor = Value
-    end
-})
-
--- Светлый цвет полосы здоровья
-VisualSettingsTab:AddColorPicker("HealthBarLightColor", {
-    Default = getgenv().SilentAimSettings.TargetStats.HealthBar.LightColor,
-    Title = "Health Bar Light Color",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.TargetStats.HealthBar.LightColor = Value
-    end
-})
-
--- Темный цвет полосы брони
-VisualSettingsTab:AddColorPicker("ArmorBarDarkColor", {
-    Default = getgenv().SilentAimSettings.TargetStats.ArmorBar.DarkColor,
-    Title = "Armor Bar Dark Color",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.TargetStats.ArmorBar.DarkColor = Value
-    end
-})
-
--- Светлый цвет полосы брони
-VisualSettingsTab:AddColorPicker("ArmorBarLightColor", {
-    Default = getgenv().SilentAimSettings.TargetStats.ArmorBar.LightColor,
-    Title = "Armor Bar Light Color",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.TargetStats.ArmorBar.LightColor = Value
-    end
-})
-
--- Цвет частиц урона
-VisualSettingsTab:AddColorPicker("DamageParticlesColor", {
-    Default = getgenv().SilentAimSettings.TargetStats.DamageParticles.Color,
-    Title = "Damage Particles Color",
-    Callback = function(Value)
-        getgenv().SilentAimSettings.TargetStats.DamageParticles.Color = Value
-    end
-})
-
--- Логика Silent Aim с исправленной консолью
-local v1 = (function()
+-- Создание консоли (исправленная версия)
+local function createConsole()
     local v2 = game:GetService("Players")
     local v3 = v2.LocalPlayer
     local v4 = v3:WaitForChild("PlayerGui")
     local v5 = game:GetService("UserInputService")
+    local TextService = game:GetService("TextService")
+    
     local v6 = Instance.new("ScreenGui")
-    v6.Name = "TitanCX"
+    v6.Name = "TitanCX_Console"
     v6.ResetOnSpawn = false
     v6.Parent = v4
+    
     local v7 = Instance.new("Frame")
     v7.Size = UDim2.new(0, 300, 0, 200)
     v7.Position = UDim2.new(0, 50, 0, 50)
     v7.BackgroundColor3 = Color3.fromRGB(70, 70, 73)
     v7.BorderSizePixel = 0
     v7.Parent = v6
+    
     local v8 = Instance.new("ImageLabel")
     v8.Size = UDim2.new(1, 20, 1, 20)
     v8.Position = UDim2.new(0, -10, 0, -10)
@@ -3221,18 +2853,25 @@ local v1 = (function()
     v8.ScaleType = Enum.ScaleType.Slice
     v8.SliceCenter = Rect.new(10, 10, 10, 10)
     v8.Parent = v7
+    
     local v9 = Instance.new("Frame")
     v9.Size = UDim2.new(1, 0, 0, 30)
     v9.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     v9.BorderSizePixel = 0
     v9.Parent = v7
+    
     local v10 = Instance.new("UICorner")
     v10.CornerRadius = UDim.new(0, 10)
     v10.Parent = v9
+    
     local v11 = Instance.new("UIGradient")
-    v11.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 215, 0)), ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 105, 180))})
+    v11.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 215, 0)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 105, 180))
+    })
     v11.Rotation = 90
     v11.Parent = v9
+    
     local v12 = Instance.new("TextLabel")
     v12.Size = UDim2.new(0.7, 0, 1, 0)
     v12.Position = UDim2.new(0, 10, 0, 0)
@@ -3244,6 +2883,7 @@ local v1 = (function()
     v12.TextXAlignment = Enum.TextXAlignment.Left
     v12.TextYAlignment = Enum.TextYAlignment.Center
     v12.Parent = v9
+    
     local v13 = UDim2.new(0, 45, 0, 30)
     local v14 = Instance.new("TextButton")
     v14.Size = v13
@@ -3251,24 +2891,28 @@ local v1 = (function()
     v14.BackgroundTransparency = 1
     v14.Text = ""
     v14.Parent = v9
+    
     local v15 = Instance.new("ImageLabel")
     v15.Size = UDim2.new(0, 20, 0, 20)
     v15.Position = UDim2.new(0.5, -10, 0.5, -10)
     v15.BackgroundTransparency = 1
     v15.Image = "rbxassetid://81207376475342"
     v15.Parent = v14
+    
     local v16 = Instance.new("TextButton")
     v16.Size = v13
     v16.Position = UDim2.new(1, -45, 0, 0)
     v16.BackgroundTransparency = 1
     v16.Text = ""
     v16.Parent = v9
+    
     local v17 = Instance.new("ImageLabel")
     v17.Size = UDim2.new(0, 20, 0, 20)
     v17.Position = UDim2.new(0.5, -10, 0.5, -10)
     v17.BackgroundTransparency = 1
     v17.Image = "rbxassetid://100234668796385"
     v17.Parent = v16
+    
     local v18 = Instance.new("ScrollingFrame")
     v18.Size = UDim2.new(1, -10, 1, -55)
     v18.Position = UDim2.new(0, 5, 0, 35)
@@ -3276,15 +2920,18 @@ local v1 = (function()
     v18.ScrollBarThickness = 4
     v18.CanvasSize = UDim2.new(0, 0, 0, 0)
     v18.Parent = v7
+    
     local v19 = Instance.new("UIListLayout")
     v19.SortOrder = Enum.SortOrder.LayoutOrder
     v19.Parent = v18
+    
     local v20 = Instance.new("Frame")
     v20.Size = UDim2.new(1, 0, 0, 20)
     v20.Position = UDim2.new(0, 0, 1, -20)
     v20.BackgroundColor3 = Color3.fromRGB(90, 90, 97)
     v20.BorderSizePixel = 0
     v20.Parent = v7
+    
     local v21 = Instance.new("TextLabel")
     v21.Size = UDim2.new(1, 0, 1, 0)
     v21.BackgroundTransparency = 1
@@ -3293,35 +2940,36 @@ local v1 = (function()
     v21.TextSize = 14
     v21.Font = Enum.Font.Gotham
     v21.Parent = v20
-
-    -- Функция добавления лога с динамическим размером
-    local function v22(v23)
+    
+    local function addLog(text)
         local v24 = Instance.new("TextLabel")
         v24.Size = UDim2.new(1, 0, 0, 20)
         v24.BackgroundTransparency = 1
         v24.RichText = true
-        v24.Text = v23
+        v24.Text = text
         v24.TextColor3 = Color3.fromRGB(255, 255, 255)
         v24.TextSize = 14
         v24.Font = Enum.Font.GothamBold
         v24.TextXAlignment = Enum.TextXAlignment.Left
         v24.TextWrapped = true
         v24.Parent = v18
-
-        -- Обновление размера метки
+        
         local function updateLabelSize()
-            local v25 = v24.TextBounds
-            local v26 = math.ceil(v25.X / (v18.AbsoluteSize.X - 10)) + 1
-            v24.Size = UDim2.new(1, 0, 0, math.max(20, v26 * 20))
-            v18.CanvasSize = UDim2.new(0, 0, 0, v19.AbsoluteContentSize.Y)
-            v18.CanvasPosition = Vector2.new(0, v19.AbsoluteContentSize.Y)
+            local textBounds = TextService:GetTextSize(
+                v24.Text,
+                v24.TextSize,
+                v24.Font,
+                Vector2.new(v18.AbsoluteSize.X - 10, math.huge)
+            )
+            local lines = math.ceil(textBounds.X / (v18.AbsoluteSize.X - 10))
+            v24.Size = UDim2.new(1, 0, 0, math.max(20, lines * 20))
         end
-
+        
         updateLabelSize()
-        v18:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateLabelSize)
+        v18.CanvasSize = UDim2.new(0, 0, 0, v19.AbsoluteContentSize.Y)
+        v18.CanvasPosition = Vector2.new(0, v19.AbsoluteContentSize.Y)
     end
-
-    -- Перетаскивание окна
+    
     local v27 = false
     local v28 = nil
     local v29 = nil
@@ -3332,19 +2980,20 @@ local v1 = (function()
             v29 = v7.Position
         end
     end)
+    
     v5.InputChanged:Connect(function(v30)
         if v30.UserInputType == Enum.UserInputType.MouseMovement and v27 then
             local v31 = v30.Position - v28
             v7.Position = UDim2.new(v29.X.Scale, v29.X.Offset + v31.X, v29.Y.Scale, v29.Y.Offset + v31.Y)
         end
     end)
+    
     v5.InputEnded:Connect(function(v30)
         if v30.UserInputType == Enum.UserInputType.MouseButton1 then
             v27 = false
         end
     end)
-
-    -- Изменение размера окна
+    
     local v32 = false
     local v33 = nil
     local v34 = nil
@@ -3354,6 +3003,7 @@ local v1 = (function()
     v35.BackgroundTransparency = 1
     v35.Text = ""
     v35.Parent = v7
+    
     local v36 = Instance.new("ImageLabel")
     v36.Size = UDim2.new(0, 20, 0, 20)
     v36.Position = UDim2.new(1, -20, 1, -20)
@@ -3361,6 +3011,23 @@ local v1 = (function()
     v36.Image = "rbxassetid://6014261993"
     v36.ImageColor3 = Color3.fromRGB(200, 200, 200)
     v36.Parent = v7
+    
+    local function updateAllLabels()
+        for _, v39 in pairs(v18:GetChildren()) do
+            if v39:IsA("TextLabel") then
+                local textBounds = TextService:GetTextSize(
+                    v39.Text,
+                    v39.TextSize,
+                    v39.Font,
+                    Vector2.new(v18.AbsoluteSize.X - 10, math.huge)
+                )
+                local lines = math.ceil(textBounds.X / (v18.AbsoluteSize.X - 10))
+                v39.Size = UDim2.new(1, 0, 0, math.max(20, lines * 20))
+            end
+        end
+        v18.CanvasSize = UDim2.new(0, 0, 0, v19.AbsoluteContentSize.Y)
+    end
+    
     v35.InputBegan:Connect(function(v30)
         if v30.UserInputType == Enum.UserInputType.MouseButton1 then
             v32 = true
@@ -3368,30 +3035,23 @@ local v1 = (function()
             v34 = v7.Size
         end
     end)
+    
     v5.InputChanged:Connect(function(v30)
         if v30.UserInputType == Enum.UserInputType.MouseMovement and v32 then
             local v31 = v30.Position - v33
             local v37 = math.max(200, v34.X.Offset + v31.X)
             local v38 = math.max(150, v34.Y.Offset + v31.Y)
             v7.Size = UDim2.new(0, v37, 0, v38)
-            -- Обновление всех меток при изменении размера
-            for _, v39 in pairs(v18:GetChildren()) do
-                if v39:IsA("TextLabel") then
-                    local v40 = v39.TextBounds
-                    local v41 = math.ceil(v40.X / (v18.AbsoluteSize.X - 10)) + 1
-                    v39.Size = UDim2.new(1, 0, 0, math.max(20, v41 * 20))
-                end
-            end
-            v18.CanvasSize = UDim2.new(0, 0, 0, v19.AbsoluteContentSize.Y)
+            updateAllLabels()
         end
     end)
+    
     v5.InputEnded:Connect(function(v30)
         if v30.UserInputType == Enum.UserInputType.MouseButton1 then
             v32 = false
         end
     end)
-
-    -- Максимизация/восстановление окна
+    
     local v42 = false
     local v43 = v7.Size
     local v44 = v7.Position
@@ -3409,16 +3069,16 @@ local v1 = (function()
             v15.Image = "rbxassetid://84930406585654"
             v42 = true
         end
+        updateAllLabels()
     end)
-
-    -- Закрытие консоли
+    
     v16.MouseButton1Click:Connect(function()
         v7.Visible = false
-        getgenv().SilentAimSettings.ConsoleLogger.EnabledOnStart = false
-        Toggles.ConsoleEnabled:SetValue(false)
+        if Toggles.SilentAimShowConsole then
+            Toggles.SilentAimShowConsole:SetValue(false)
+        end
     end)
-
-    -- Эффекты наведения на кнопки
+    
     local function v45(v46, v47)
         v46.MouseEnter:Connect(function()
             v46.BackgroundColor3 = v47
@@ -3428,12 +3088,19 @@ local v1 = (function()
             v46.BackgroundTransparency = 1
         end)
     end
+    
     v45(v14, Color3.fromRGB(0, 100, 195))
     v45(v16, Color3.fromRGB(232, 17, 35))
+    
+    return {
+        addLog = addLog,
+        setVisible = function(v48)
+            v7.Visible = v48
+        end
+    }
+end
 
-    return { addLog = v22, setVisible = function(v48) v7.Visible = v48 end }
-end)()
-
+-- Silent Aim логика
 local v49 = game:GetService("UserInputService")
 local v50 = game:GetService("Players")
 local v51 = game:GetService("ReplicatedStorage")
@@ -3452,7 +3119,7 @@ local v63 = nil
 local v64 = 0
 local v65 = "Ground"
 local v66 = nil
-local v67 = v1
+local v67 = createConsole()
 local v68 = nil
 local v69 = nil
 local v70 = nil
@@ -3460,7 +3127,7 @@ local v71 = nil
 local v72 = nil
 local v73 = nil
 
-local function v74()
+local function createTracer()
     if v60 then
         v60:Destroy()
         v61:Destroy()
@@ -3475,46 +3142,62 @@ local function v74()
     v60.Name = "AimTracer"
     v60.Attachment0 = v61
     v60.Attachment1 = v62
-    v60.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, getgenv().SilentAimSettings.Tracer.Color), ColorSequenceKeypoint.new(1, getgenv().SilentAimSettings.Tracer.FadeColor)})
-    v60.LightEmission = getgenv().SilentAimSettings.Tracer.LightEmission
-    v60.LightInfluence = getgenv().SilentAimSettings.Tracer.LightInfluence
-    v60.Width0 = getgenv().SilentAimSettings.Tracer.Width0
-    v60.Width1 = getgenv().SilentAimSettings.Tracer.Width1
-    v60.Texture = getgenv().SilentAimSettings.Tracer.Texture
-    v60.TextureSpeed = getgenv().SilentAimSettings.Tracer.TextureSpeed
+    v60.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Settings.Tracer.Color),
+        ColorSequenceKeypoint.new(1, Settings.Tracer.FadeColor)
+    })
+    v60.LightEmission = Settings.Tracer.LightEmission
+    v60.LightInfluence = Settings.Tracer.LightInfluence
+    v60.Width0 = Settings.Tracer.Width0
+    v60.Width1 = Settings.Tracer.Width1
+    v60.Texture = Settings.Tracer.Texture
+    v60.TextureSpeed = Settings.Tracer.TextureSpeed
     v60.Enabled = false
     v60.Parent = workspace.Terrain
     v63 = Instance.new("ParticleEmitter")
-    v63.Color = ColorSequence.new(getgenv().SilentAimSettings.Particles.Color)
-    v63.Size = getgenv().SilentAimSettings.Particles.Size
-    v63.Lifetime = getgenv().SilentAimSettings.Particles.Lifetime
-    v63.Rate = getgenv().SilentAimSettings.Particles.Rate
-    v63.Speed = getgenv().SilentAimSettings.Particles.Speed
-    v63.SpreadAngle = getgenv().SilentAimSettings.Particles.SpreadAngle
+    v63.Color = ColorSequence.new(Settings.Particles.Color)
+    v63.Size = Settings.Particles.Size
+    v63.Lifetime = Settings.Particles.Lifetime
+    v63.Rate = Settings.Particles.Rate
+    v63.Speed = Settings.Particles.Speed
+    v63.SpreadAngle = Settings.Particles.SpreadAngle
     v63.Enabled = false
     v63.Parent = v62
 end
 
-local function v75(v76)
+local function getTargetInfo(v76)
     if not v76 or not v76.Character then return nil end
     local v77 = v76.Character:FindFirstChild("Humanoid")
     local v78 = v76.Character:FindFirstChild("HumanoidRootPart")
     if not v77 or not v78 then return nil end
     local v79 = 0
-    local v80 = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild(v76.Name) and workspace.Players[v76.Name]:FindFirstChild("BodyEffects") and workspace.Players[v76.Name].BodyEffects:FindFirstChild("Armor")
+    local v80 = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild(v76.Name) and
+                workspace.Players[v76.Name]:FindFirstChild("BodyEffects") and
+                workspace.Players[v76.Name].BodyEffects:FindFirstChild("Armor")
     if v80 then v79 = v80.Value end
-    return { Name = v76.Name, Health = v77.Health, MaxHealth = v77.MaxHealth, Armor = v79, Position = v78.Position, Distance = (v78.Position - (v59 and v59.HumanoidRootPart and v59.HumanoidRootPart.Position or Vector3.new())).Magnitude, Status = v65 }
+    return {
+        Name = v76.Name,
+        Health = v77.Health,
+        MaxHealth = v77.MaxHealth,
+        Armor = v79,
+        Position = v78.Position,
+        Distance = (v78.Position - (v59 and v59.HumanoidRootPart and v59.HumanoidRootPart.Position or Vector3.new())).Magnitude,
+        Status = v65
+    }
 end
 
-local function v81(v82)
+local function printTargetInfo(v82)
     if v82 then
-        print(string.format("Target: %s | Health: %.1f/%.1f | Armor: %.1f | Distance: %.2f studs | Position: (%.2f, %.2f, %.2f) | Status: %s", v82.Name, v82.Health, v82.MaxHealth, v82.Armor, v82.Distance, v82.Position.X, v82.Position.Y, v82.Position.Z, v82.Status))
+        print(string.format(
+            "Target: %s | Health: %.1f/%.1f | Armor: %.1f | Distance: %.2f studs | Position: (%.2f, %.2f, %.2f) | Status: %s",
+            v82.Name, v82.Health, v82.MaxHealth, v82.Armor, v82.Distance, v82.Position.X, v82.Position.Y, v82.Position.Z, v82.Status
+        ))
     else
         print("No target information available")
     end
 end
 
-local function v83()
+local function findClosestTarget()
     local v84, v85 = nil, math.huge
     for _, v86 in pairs(v50:GetPlayers()) do
         if v86 ~= v55 and v86.Character then
@@ -3535,13 +3218,13 @@ local function v83()
     return v84
 end
 
-local function v92(v93)
+local function updateTargetState(v93)
     if v58 and v58.Character and v58.Character:FindFirstChild("Humanoid") then
         local v94 = v58.Character.Humanoid
         local v95 = v94.FloorMaterial == Enum.Material.Air
         if v95 then
             v64 = v64 + v93
-            v65 = "Jumped"
+            v65 = v64 > 0 and "Jumped" or "Fly"
         else
             v64 = 0
             v65 = "Ground"
@@ -3554,25 +3237,29 @@ end
 
 local v96, v97
 
-local function v98(v99, v100)
+local function predictPosition(v99, v100)
     if not v99 or not v100 then return v99 and v99.Position or Vector3.new() end
     local v101 = v99.Position
     local v102 = v99.Velocity
     if v65 == "Jumped" then
-        local v103 = v101 + Vector3.new(0, getgenv().SilentAimSettings.JumpOffset.Height, 0)
-        if getgenv().SilentAimSettings.PredictionMode == "Velocity" then
-            return v103 + v102 * getgenv().SilentAimSettings.PredictionFactor
+        local v103 = v101 + Vector3.new(0, Settings.JumpOffset.Height, 0)
+        if Settings.PredictionMode == "Velocity" then
+            return v103 + v102 * Settings.PredictionFactor
         end
         return v103
     end
-    if getgenv().SilentAimSettings.PredictionMode == "Velocity" then
-        return v101 + Vector3.new(v102.X * getgenv().SilentAimSettings.PredictionFactor, v102.Y * getgenv().SilentAimSettings.PredictionFactor, v102.Z * getgenv().SilentAimSettings.PredictionFactor)
-    elseif getgenv().SilentAimSettings.PredictionMode == "MoveDirection" then
+    if Settings.PredictionMode == "Velocity" then
+        return v101 + Vector3.new(
+            v102.X * Settings.PredictionFactor,
+            v102.Y * Settings.PredictionFactor,
+            v102.Z * Settings.PredictionFactor
+        )
+    elseif Settings.PredictionMode == "MoveDirection" then
         if v100.MoveDirection ~= Vector3.new() then
-            return v101 + (v100.MoveDirection.Unit * (getgenv().SilentAimSettings.PredictionFactor * 10))
+            return v101 + (v100.MoveDirection.Unit * (Settings.PredictionFactor * 10))
         end
         return v101
-    elseif getgenv().SilentAimSettings.PredictionMode == "CalculateCFrame" then
+    elseif Settings.PredictionMode == "CalculateCFrame" then
         local v104 = tick()
         local v105 = v104 - (v97 or v104)
         if not v96 or (v101 - v96).Magnitude < 0.001 then
@@ -3581,9 +3268,9 @@ local function v98(v99, v100)
             return v101
         end
         local v106 = (v101 - v96).Magnitude
-        local v107 = (v106 / v105) * (0.1 * (getgenv().SilentAimSettings.PredictionFactor * 10))
+        local v107 = (v106 / v105) * (0.1 * (Settings.PredictionFactor * 10))
         local v108 = v101 + (v101 - v96).Unit * v107
-        local v109 = (v101.Y - v96.Y) / v105 * (0.1 * getgenv().SilentAimSettings.PredictionFactor)
+        local v109 = (v101.Y - v96.Y) / v105 * (0.1 * Settings.PredictionFactor)
         v108 = v108 + Vector3.new(0, v109, 0)
         v97 = v104
         v96 = v101
@@ -3592,72 +3279,109 @@ local function v98(v99, v100)
     return v101
 end
 
-local function v110()
-    local v111 = { ScreenGui = nil, MainFrame = nil, HealthBar = nil, ArmorBar = nil, NameLabel = nil, AvatarImage = nil, PositionLabel = nil, HealthText = nil, ArmorText = nil, DamageParticles = nil, IsDragging = false, LastMousePos = nil, Tweens = {}, Connections = {}, LastHealth = nil, LastArmor = nil, HealthConnection = nil, ArmorConnection = nil }
+local function createTargetStatsGui()
+    local v111 = {
+        ScreenGui = nil,
+        MainFrame = nil,
+        HealthBar = nil,
+        ArmorBar = nil,
+        NameLabel = nil,
+        AvatarImage = nil,
+        PositionLabel = nil,
+        HealthText = nil,
+        ArmorText = nil,
+        DamageParticles = nil,
+        IsDragging = false,
+        LastMousePos = nil,
+        Tweens = {},
+        Connections = {},
+        LastHealth = nil,
+        LastArmor = nil,
+        HealthConnection = nil,
+        ArmorConnection = nil
+    }
     v111.ScreenGui = Instance.new("ScreenGui")
     v111.ScreenGui.Name = "TargetStatsGui"
     v111.ScreenGui.ResetOnSpawn = false
     v111.ScreenGui.IgnoreGuiInset = true
     v111.ScreenGui.Parent = v55:WaitForChild("PlayerGui")
     v111.MainFrame = Instance.new("Frame")
-    v111.MainFrame.Size = getgenv().SilentAimSettings.TargetStats.FrameSize
+    v111.MainFrame.Size = Settings.TargetStats.FrameSize
     v111.MainFrame.Position = UDim2.new(0.5, -150, 0.5, -60)
-    v111.MainFrame.BackgroundColor3 = getgenv().SilentAimSettings.TargetStats.BackgroundColor
-    v111.MainFrame.BackgroundTransparency = getgenv().SilentAimSettings.TargetStats.BackgroundTransparency
+    v111.MainFrame.BackgroundColor3 = Settings.TargetStats.BackgroundColor
+    v111.MainFrame.BackgroundTransparency = Settings.TargetStats.BackgroundTransparency
     v111.MainFrame.BorderSizePixel = 0
     v111.MainFrame.Visible = false
     v111.MainFrame.Parent = v111.ScreenGui
+    
     local v112 = Instance.new("UICorner")
     v112.CornerRadius = UDim.new(0, 8)
     v112.Parent = v111.MainFrame
+    
     local v113 = Instance.new("Frame")
     v113.Size = UDim2.new(1, 6, 1, 6)
     v113.Position = UDim2.new(0, -3, 0, -3)
     v113.BackgroundTransparency = 0
     v113.BorderSizePixel = 0
     v113.Parent = v111.MainFrame
+    
     local v114 = Instance.new("UIGradient")
-    v114.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, getgenv().SilentAimSettings.TargetStats.GradientColors.Start), ColorSequenceKeypoint.new(1, getgenv().SilentAimSettings.TargetStats.GradientColors.End)})
+    v114.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Settings.TargetStats.GradientColors.Start),
+        ColorSequenceKeypoint.new(1, Settings.TargetStats.GradientColors.End)
+    })
     v114.Rotation = 45
     v114.Parent = v113
+    
     local v115 = Instance.new("Frame")
     v115.Size = UDim2.new(1, -6, 1, -6)
     v115.Position = UDim2.new(0, 3, 0, 3)
-    v115.BackgroundColor3 = getgenv().SilentAimSettings.TargetStats.BackgroundColor
-    v115.BackgroundTransparency = getgenv().SilentAimSettings.TargetStats.BackgroundTransparency
+    v115.BackgroundColor3 = Settings.TargetStats.BackgroundColor
+    v115.BackgroundTransparency = Settings.TargetStats.BackgroundTransparency
     v115.BorderSizePixel = 0
     v115.Parent = v113
+    
     local v116 = Instance.new("UICorner")
     v116.CornerRadius = UDim.new(0, 8)
     v116.Parent = v115
+    
     v111.AvatarImage = Instance.new("ImageLabel")
-    v111.AvatarImage.Size = getgenv().SilentAimSettings.TargetStats.Avatar.Size
-    v111.AvatarImage.Position = getgenv().SilentAimSettings.TargetStats.Avatar.Position
+    v111.AvatarImage.Size = Settings.TargetStats.Avatar.Size
+    v111.AvatarImage.Position = Settings.TargetStats.Avatar.Position
     v111.AvatarImage.BackgroundTransparency = 1
     v111.AvatarImage.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
     v111.AvatarImage.ScaleType = Enum.ScaleType.Fit
     v111.AvatarImage.Parent = v111.MainFrame
+    
     local v117 = Instance.new("UICorner")
     v117.CornerRadius = UDim.new(0, 8)
     v117.Parent = v111.AvatarImage
+    
     local v118 = Instance.new("Frame")
-    v118.Size = getgenv().SilentAimSettings.TargetStats.HealthBar.Size
-    v118.Position = getgenv().SilentAimSettings.TargetStats.HealthBar.Position
+    v118.Size = Settings.TargetStats.HealthBar.Size
+    v118.Position = Settings.TargetStats.HealthBar.Position
     v118.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     v118.BorderSizePixel = 0
     v118.Parent = v111.MainFrame
+    
     v111.HealthBar = Instance.new("Frame")
     v111.HealthBar.Size = UDim2.new(1, 0, 1, 0)
     v111.HealthBar.BackgroundTransparency = 0
     v111.HealthBar.BorderSizePixel = 0
     v111.HealthBar.Parent = v118
+    
     local v119 = Instance.new("UICorner")
     v119.CornerRadius = UDim.new(0, 4)
     v119.Parent = v118
+    
     local v120 = Instance.new("UIGradient")
-    v120.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, getgenv().SilentAimSettings.TargetStats.HealthBar.DarkColor), ColorSequenceKeypoint.new(1, getgenv().SilentAimSettings.TargetStats.HealthBar.LightColor)})
+    v120.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Settings.TargetStats.HealthBar.DarkColor),
+        ColorSequenceKeypoint.new(1, Settings.TargetStats.HealthBar.LightColor)
+    })
     v120.Rotation = 45
     v120.Parent = v111.HealthBar
+    
     v111.HealthText = Instance.new("TextLabel")
     v111.HealthText.Size = UDim2.new(1, 0, 1, 0)
     v111.HealthText.Position = UDim2.new(0, 0, 0, 0)
@@ -3669,24 +3393,32 @@ local function v110()
     v111.HealthText.TextStrokeTransparency = 0.5
     v111.HealthText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     v111.HealthText.Parent = v118
+    
     local v121 = Instance.new("Frame")
-    v121.Size = getgenv().SilentAimSettings.TargetStats.ArmorBar.Size
-    v121.Position = getgenv().SilentAimSettings.TargetStats.ArmorBar.Position
+    v121.Size = Settings.TargetStats.ArmorBar.Size
+    v121.Position = Settings.TargetStats.ArmorBar.Position
     v121.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     v121.BorderSizePixel = 0
     v121.Parent = v111.MainFrame
+    
     v111.ArmorBar = Instance.new("Frame")
     v111.ArmorBar.Size = UDim2.new(1, 0, 1, 0)
     v111.ArmorBar.BackgroundTransparency = 0
     v111.ArmorBar.BorderSizePixel = 0
     v111.ArmorBar.Parent = v121
+    
     local v122 = Instance.new("UICorner")
     v122.CornerRadius = UDim.new(0, 4)
     v122.Parent = v121
+    
     local v123 = Instance.new("UIGradient")
-    v123.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, getgenv().SilentAimSettings.TargetStats.ArmorBar.DarkColor), ColorSequenceKeypoint.new(1, getgenv().SilentAimSettings.TargetStats.ArmorBar.LightColor)})
+    v123.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Settings.TargetStats.ArmorBar.DarkColor),
+        ColorSequenceKeypoint.new(1, Settings.TargetStats.ArmorBar.LightColor)
+    })
     v123.Rotation = 45
     v123.Parent = v111.ArmorBar
+    
     v111.ArmorText = Instance.new("TextLabel")
     v111.ArmorText.Size = UDim2.new(1, 0, 1, 0)
     v111.ArmorText.Position = UDim2.new(0, 0, 0, 0)
@@ -3698,6 +3430,7 @@ local function v110()
     v111.ArmorText.TextStrokeTransparency = 0.5
     v111.ArmorText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     v111.ArmorText.Parent = v121
+    
     v111.NameLabel = Instance.new("TextLabel")
     v111.NameLabel.Size = UDim2.new(0.65, 0, 0.2, 0)
     v111.NameLabel.Position = UDim2.new(0.3, 5, 0.1, 0)
@@ -3710,9 +3443,10 @@ local function v110()
     v111.NameLabel.TextStrokeTransparency = 0.5
     v111.NameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     v111.NameLabel.Parent = v111.MainFrame
+    
     v111.PositionLabel = Instance.new("TextLabel")
-    v111.PositionLabel.Size = getgenv().SilentAimSettings.TargetStats.PositionLabel.Size
-    v111.PositionLabel.Position = getgenv().SilentAimSettings.TargetStats.PositionLabel.Position
+    v111.PositionLabel.Size = Settings.TargetStats.PositionLabel.Size
+    v111.PositionLabel.Position = Settings.TargetStats.PositionLabel.Position
     v111.PositionLabel.BackgroundTransparency = 1
     v111.PositionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     v111.PositionLabel.TextScaled = true
@@ -3721,65 +3455,86 @@ local function v110()
     v111.PositionLabel.TextStrokeTransparency = 0.5
     v111.PositionLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
     v111.PositionLabel.Parent = v111.MainFrame
+    
     v111.DamageParticles = Instance.new("ParticleEmitter")
-    v111.DamageParticles.Color = ColorSequence.new(getgenv().SilentAimSettings.TargetStats.DamageParticles.Color)
-    v111.DamageParticles.Size = getgenv().SilentAimSettings.TargetStats.DamageParticles.Size
-    v111.DamageParticles.Lifetime = getgenv().SilentAimSettings.TargetStats.DamageParticles.Lifetime
-    v111.DamageParticles.Rate = getgenv().SilentAimSettings.TargetStats.DamageParticles.Rate
-    v111.DamageParticles.Speed = getgenv().SilentAimSettings.TargetStats.DamageParticles.Speed
-    v111.DamageParticles.SpreadAngle = getgenv().SilentAimSettings.TargetStats.DamageParticles.SpreadAngle
+    v111.DamageParticles.Color = ColorSequence.new(Settings.TargetStats.DamageParticles.Color)
+    v111.DamageParticles.Size = Settings.TargetStats.DamageParticles.Size
+    v111.DamageParticles.Lifetime = Settings.TargetStats.DamageParticles.Lifetime
+    v111.DamageParticles.Rate = Settings.TargetStats.DamageParticles.Rate
+    v111.DamageParticles.Speed = Settings.TargetStats.DamageParticles.Speed
+    v111.DamageParticles.SpreadAngle = Settings.TargetStats.DamageParticles.SpreadAngle
     v111.DamageParticles.Enabled = false
     v111.DamageParticles.Parent = v111.MainFrame
-    local function v124(v125)
+    
+    local function dragFrame(v125)
         if v111.IsDragging and v111.MainFrame then
             local v126 = v125.Position
             local v127 = v126 - v111.LastMousePos
             local v128 = v111.MainFrame.Position + UDim2.new(0, v127.X, 0, v127.Y)
             local v129 = v54:GetScreenResolution()
-            v128 = UDim2.new(math.clamp(v128.X.Scale, 0, 1 - v111.MainFrame.Size.X.Scale), v128.X.Offset, math.clamp(v128.Y.Scale, 0, 1 - v111.MainFrame.Size.Y.Scale), v128.Y.Offset)
-            local v130 = TweenInfo.new(getgenv().SilentAimSettings.TargetStats.Drag.Smoothness, getgenv().SilentAimSettings.TargetStats.Animation.EasingStyle, getgenv().SilentAimSettings.TargetStats.Animation.EVDirection)
-            local v131 = v53:Create(v111.MainFrame, v130, { Position = v128 })
+            v128 = UDim2.new(
+                math.clamp(v128.X.Scale, 0, 1 - v111.MainFrame.Size.X.Scale),
+                v128.X.Offset,
+                math.clamp(v128.Y.Scale, 0, 1 - v111.MainFrame.Size.Y.Scale),
+                v128.Y.Offset
+            )
+            local v130 = TweenInfo.new(
+                Settings.TargetStats.Drag.Smoothness,
+                Settings.TargetStats.Animation.EasingStyle,
+                Settings.TargetStats.Animation.EasingDirection
+            )
+            local v131 = v53:Create(v111.MainFrame, v130, {Position = v128})
             v131:Play()
             v111.Tweens["Drag"] = v131
             v111.LastMousePos = v126
         end
     end
+    
     v111.Connections[#v111.Connections + 1] = v111.MainFrame.InputBegan:Connect(function(v125)
         if v125.UserInputType == Enum.UserInputType.MouseButton1 or v125.UserInputType == Enum.UserInputType.Touch then
             v111.IsDragging = true
             v111.LastMousePos = v125.Position
         end
     end)
+    
     v111.Connections[#v111.Connections + 1] = v111.MainFrame.InputEnded:Connect(function(v125)
         if v125.UserInputType == Enum.UserInputType.MouseButton1 or v125.UserInputType == Enum.UserInputType.Touch then
             v111.IsDragging = false
         end
     end)
+    
     v111.Connections[#v111.Connections + 1] = v49.InputChanged:Connect(function(v125)
         if v125.UserInputType == Enum.UserInputType.MouseMovement or v125.UserInputType == Enum.UserInputType.Touch then
-            v124(v125)
+            dragFrame(v125)
         end
     end)
+    
     function v111:Update(v132, v133)
         if not self.MainFrame then return end
         if v132 and v132.Character and v132.Character:FindFirstChild("Humanoid") then
-            self.MainFrame.Visible = true
+            self.MainFrame.Visible = Settings.TargetStats.Enabled
             local v134 = v132.Character.Humanoid
             local v135 = v134.Health / v134.MaxHealth
             local v136 = 0
-            local v137 = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild(v132.Name) and workspace.Players[v132.Name]:FindFirstChild("BodyEffects") and workspace.Players[v132.Name].BodyEffects:FindFirstChild("Armor")
+            local v137 = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild(v132.Name) and
+                        workspace.Players[v132.Name]:FindFirstChild("BodyEffects") and
+                        workspace.Players[v132.Name].BodyEffects:FindFirstChild("Armor")
             if v137 then v136 = v137.Value / 100 end
-            local v138 = TweenInfo.new(getgenv().SilentAimSettings.TargetStats.Animation.TweenTime, getgenv().SilentAimSettings.TargetStats.Animation.EasingStyle, getgenv().SilentAimSettings.TargetStats.Animation.EasingDirection)
+            local v138 = TweenInfo.new(
+                Settings.TargetStats.Animation.TweenTime,
+                Settings.TargetStats.Animation.EasingStyle,
+                Settings.TargetStats.Animation.EasingDirection
+            )
             if self.Tweens["Health"] then
                 self.Tweens["Health"]:Cancel()
             end
-            local v139 = v53:Create(self.HealthBar, v138, { Size = UDim2.new(math.clamp(v135, 0, 1), 0, 1, 0) })
+            local v139 = v53:Create(self.HealthBar, v138, {Size = UDim2.new(math.clamp(v135, 0, 1), 0, 1, 0)})
             v139:Play()
             self.Tweens["Health"] = v139
             if self.Tweens["Armor"] then
                 self.Tweens["Armor"]:Cancel()
             end
-            local v140 = v53:Create(self.ArmorBar, v138, { Size = UDim2.new(math.clamp(v136, 0, 1), 0, 1, 0) })
+            local v140 = v53:Create(self.ArmorBar, v138, {Size = UDim2.new(math.clamp(v136, 0, 1), 0, 1, 0)})
             v140:Play()
             self.Tweens["Armor"] = v140
             self.HealthText.Text = tostring(math.floor(v134.Health))
@@ -3811,6 +3566,7 @@ local function v110()
             end
         end
     end
+    
     function v111:Destroy()
         for _, v144 in pairs(self.Tweens) do
             if v144 then v144:Cancel() end
@@ -3841,23 +3597,24 @@ local function v110()
         self.Tweens = {}
         self.Connections = {}
     end
+    
     return v111
 end
 
-local function v146(v147)
-    v92(v147)
-    if getgenv().SilentAimSettings.Enabled and v58 and v58.Character and v58.Character:FindFirstChild("HumanoidRootPart") and v59 and v59:FindFirstChild("HumanoidRootPart") then
+local function updateSilentAim(v147)
+    updateTargetState(v147)
+    if v58 and v58.Character and v58.Character:FindFirstChild("HumanoidRootPart") and v59 and v59:FindFirstChild("HumanoidRootPart") then
         local v148 = v59.HumanoidRootPart
         local v149 = v58.Character.HumanoidRootPart
         local v150 = v149.Velocity
-        local v151 = v98(v149, v58.Character.Humanoid)
+        local v151 = predictPosition(v149, v58.Character.Humanoid)
         v61.Parent = v148
         v61.WorldPosition = v148.Position
         v62.Parent = workspace.Terrain
         v62.WorldPosition = v151
-        v60.Enabled = true
-        v63.Enabled = true
-        v60.Brightness = 1 + getgenv().SilentAimSettings.Tracer.BrightnessPulse * math.sin(tick() * 5)
+        v60.Enabled = Settings.Tracer.Enabled
+        v63.Enabled = Settings.Tracer.Enabled
+        v60.Brightness = 1 + Settings.Tracer.BrightnessPulse * math.sin(tick() * 5)
     else
         v60.Enabled = false
         v63.Enabled = false
@@ -3867,7 +3624,7 @@ local function v146(v147)
     end
 end
 
-local function v152(v153)
+local function setupTargetLogging(v153)
     if v70 then
         v70:Disconnect()
         v70 = nil
@@ -3880,27 +3637,37 @@ local function v152(v153)
     v73 = nil
     if not v153 or not v153.Character then return end
     local v154 = v153.Character:FindFirstChild("Humanoid")
-    if v154 and getgenv().SilentAimSettings.ConsoleLogger.LogTypes.Hitlog then
+    if v154 and Settings.ConsoleLogger.LogTypes.Hitlog then
         v72 = v154.Health
         v70 = v154.HealthChanged:Connect(function(v155)
             if v72 and v155 < v72 then
                 local v156 = os.date("%H:%M:%S")
                 local v157 = 0
-                local v158 = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild(v153.Name) and workspace.Players[v153.Name]:FindFirstChild("BodyEffects") and workspace.Players[v153.Name].BodyEffects:FindFirstChild("Armor")
+                local v158 = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild(v153.Name) and
+                            workspace.Players[v153.Name]:FindFirstChild("BodyEffects") and
+                            workspace.Players[v153.Name].BodyEffects:FindFirstChild("Armor")
                 if v158 then v157 = v158.Value end
-                v67.addLog(string.format('Hitlog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>, Armor: <font color="rgb(0,0,255)">%.1f</font>', v153.Name, v156, v155, v157))
+                v67.addLog(string.format(
+                    'Hitlog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>, Armor: <font color="rgb(0,0,255)">%.1f</font>',
+                    v153.Name, v156, v155, v157
+                ))
             end
             v72 = v155
         end)
     end
-    local v158 = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild(v153.Name) and workspace.Players[v153.Name]:FindFirstChild("BodyEffects") and workspace.Players[v153.Name].BodyEffects:FindFirstChild("Armor")
-    if v158 and getgenv().SilentAimSettings.ConsoleLogger.LogTypes.Hitlog then
+    local v158 = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild(v153.Name) and
+                workspace.Players[v153.Name]:FindFirstChild("BodyEffects") and
+                workspace.Players[v153.Name].BodyEffects:FindFirstChild("Armor")
+    if v158 and Settings.ConsoleLogger.LogTypes.Hitlog then
         v73 = v158.Value
         v71 = v158:GetPropertyChangedSignal("Value"):Connect(function()
             local v159 = v158.Value
             if v72 and v73 and v159 < v73 then
                 local v160 = os.date("%H:%M:%S")
-                v67.addLog(string.format('Hitlog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>, Armor: <font color="rgb(0,0,255)">%.1f</font>', v153.Name, v160, v72, v159))
+                v67.addLog(string.format(
+                    'Hitlog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>, Armor: <font color="rgb(0,0,255)">%.1f</font>',
+                    v153.Name, v160, v72, v159
+                ))
             end
             v73 = v159
         end)
@@ -3908,32 +3675,50 @@ local function v152(v153)
 end
 
 v49.InputBegan:Connect(function(v161, v162)
-    if v162 or not getgenv().SilentAimSettings.Enabled then return end
-    if v161.KeyCode == getgenv().SilentAimSettings.Keybind then
+    if v162 or not Settings.Enabled then return end
+    if v161.KeyCode == Settings.Keybind then
         if v58 == nil then
-            v58 = v83()
+            v58 = findClosestTarget()
             if v58 then
-                warn("Locked on to: " .. v58.Name)
-                local v163 = v75(v58)
-                v81(v163)
-                v60.Enabled = true
-                v63.Enabled = true
-                v152(v58)
-                if getgenv().SilentAimSettings.ConsoleLogger.LogTypes.TargetHookedLog then
+                Library:Notify({
+                    Title = "Silent Aim",
+                    Description = "Locked on to: " .. v58.Name,
+                    Time = 2
+                })
+                local v163 = getTargetInfo(v58)
+                printTargetInfo(v163)
+                v60.Enabled = Settings.Tracer.Enabled
+                v63.Enabled = Settings.Tracer.Enabled
+                setupTargetLogging(v58)
+                if Settings.ConsoleLogger.LogTypes.TargetHookedLog then
                     local v164 = os.date("%H:%M:%S")
                     local v165 = v163 and string.format("%.2f", v163.Distance) or "N/A"
-                    v67.addLog(string.format('TargetHookedLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Distance: %s', v58.Name, v164, v165))
+                    v67.addLog(string.format(
+                        'TargetHookedLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Distance: %s',
+                        v58.Name, v164, v165
+                    ))
                 end
             else
-                warn("No target found")
+                Library:Notify({
+                    Title = "Silent Aim",
+                    Description = "No target found",
+                    Time = 2
+                })
                 v60.Enabled = false
                 v63.Enabled = false
             end
         else
-            warn("Unlocked from: " .. v58.Name)
-            if getgenv().SilentAimSettings.ConsoleLogger.LogTypes.TargetHookedLog then
+            Library:Notify({
+                Title = "Silent Aim",
+                Description = "Unlocked from: " .. v58.Name,
+                Time = 2
+            })
+            if Settings.ConsoleLogger.LogTypes.TargetHookedLog then
                 local v164 = os.date("%H:%M:%S")
-                v67.addLog(string.format('TargetHookedLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Status: Unhooked', v58.Name, v164))
+                v67.addLog(string.format(
+                    'TargetHookedLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Status: Unhooked',
+                    v58.Name, v164
+                ))
             end
             if v70 then
                 v70:Disconnect()
@@ -3954,30 +3739,38 @@ v49.InputBegan:Connect(function(v161, v162)
     end
 end)
 
-local function v166(v167)
+local function setupCharacter(v167)
     v59 = v167
     local v168 = v167:FindFirstChild("Humanoid")
     if v168 then
         v68 = v168.Health
-        if getgenv().SilentAimSettings.ConsoleLogger.LogTypes.LocalPlayerDamageLog then
+        if Settings.ConsoleLogger.LogTypes.LocalPlayerDamageLog then
             v168.HealthChanged:Connect(function(v169)
                 if v68 and v169 < v68 then
                     local v170 = os.date("%H:%M:%S")
-                    v67.addLog(string.format('LocalPlayerDamageLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>', v55.Name, v170, v169))
+                    v67.addLog(string.format(
+                        'LocalPlayerDamageLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>',
+                        v55.Name, v170, v169
+                    ))
                 end
                 v68 = v169
             end)
         end
     end
-    local v171 = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild(v55.Name) and workspace.Players[v55.Name]:FindFirstChild("BodyEffects") and workspace.Players[v55.Name].BodyEffects:FindFirstChild("Armor")
+    local v171 = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild(v55.Name) and
+                workspace.Players[v55.Name]:FindFirstChild("BodyEffects") and
+                workspace.Players[v55.Name].BodyEffects:FindFirstChild("Armor")
     if v171 then
         v69 = v171.Value
-        if getgenv().SilentAimSettings.ConsoleLogger.LogTypes.LocalPlayerArmorLog then
+        if Settings.ConsoleLogger.LogTypes.LocalPlayerArmorLog then
             v171:GetPropertyChangedSignal("Value"):Connect(function()
                 local v172 = v171.Value
                 if v69 and v172 < v69 then
                     local v173 = os.date("%H:%M:%S")
-                    v67.addLog(string.format('LocalPlayerArmorLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Armor: <font color="rgb(0,0,255)">%.1f</font>', v55.Name, v173, v172))
+                    v67.addLog(string.format(
+                        'LocalPlayerArmorLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Armor: <font color="rgb(0,0,255)">%.1f</font>',
+                        v55.Name, v173, v172
+                    ))
                 end
                 v69 = v172
             end)
@@ -3989,24 +3782,26 @@ local function v166(v167)
                 if v58 and v58.Character and v58.Character:FindFirstChild("HumanoidRootPart") then
                     local v175 = v58.Character.HumanoidRootPart
                     local v176 = v175.Velocity
-                    local v177 = v98(v175, v58.Character.Humanoid)
+                    local v177 = predictPosition(v175, v58.Character.Humanoid)
                     v51.MainEvent:FireServer("UpdateMousePos", v177)
-                    local v178 = v75(v58)
-                    v81(v178)
+                    local v178 = getTargetInfo(v58)
+                    printTargetInfo(v178)
                 end
             end)
         end
     end)
 end
 
-v74()
-v66 = v110()
-v67.setVisible(getgenv().SilentAimSettings.ConsoleLogger.EnabledOnStart)
+-- Инициализация
+createTracer()
+v66 = createTargetStatsGui()
+v67.setVisible(Settings.ConsoleLogger.Enabled)
 if v59 then
-    v166(v59)
+    setupCharacter(v59)
 end
-v55.CharacterAdded:Connect(v166)
-v52.RenderStepped:Connect(v146)
+v55.CharacterAdded:Connect(setupCharacter)
+v52.RenderStepped:Connect(updateSilentAim)
+
 game:BindToClose(function()
     if v60 then
         v60:Destroy()
@@ -4024,6 +3819,334 @@ game:BindToClose(function()
         v71:Disconnect()
     end
 end)
+
+-- UI для Silent Aim
+local SilentAimGroup = Tabs.Combat:AddRightGroupbox("Silent Aim Settings")
+
+-- Технические настройки
+SilentAimGroup:AddLabel("Technical Settings")
+
+local SilentAimToggle = SilentAimGroup:AddToggle("SilentAimEnabled", {
+    Text = "Enable Silent Aim",
+    Default = Settings.Enabled,
+    Tooltip = "Enable/Disable Silent Aim",
+    Callback = function(Value)
+        Settings.Enabled = Value
+        if not Value then
+            v58 = nil
+            v60.Enabled = false
+            v63.Enabled = false
+            v66:Update(nil)
+        end
+    end
+})
+
+SilentAimToggle:AddKeyPicker("SilentAimKeybind", {
+    Default = Settings.Keybind.Name,
+    Mode = "Toggle",
+    Text = "Silent Aim Key",
+    NoUI = false,
+    Callback = function() end,
+    ChangedCallback = function(NewKey)
+        Settings.Keybind = NewKey
+    end
+})
+
+SilentAimGroup:AddDropdown("SilentAimPredictionMode", {
+    Values = {"Velocity", "MoveDirection", "CalculateCFrame"},
+    Default = Settings.PredictionMode,
+    Multi = false,
+    Text = "Prediction Mode",
+    Tooltip = "Select prediction method",
+    Callback = function(Value)
+        Settings.PredictionMode = Value
+    end
+})
+
+SilentAimGroup:AddInput("SilentAimPredictionFactor", {
+    Default = tostring(Settings.PredictionFactor),
+    Numeric = true,
+    Finished = true,
+    Text = "Prediction Factor",
+    Tooltip = "Set prediction factor",
+    Placeholder = "Enter factor...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            Settings.PredictionFactor = numValue
+            Library:Notify({
+                Title = "Silent Aim",
+                Description = "Prediction factor set to " .. numValue,
+                Time = 2
+            })
+        end
+    end
+})
+
+SilentAimGroup:AddInput("SilentAimJumpOffsetHeight", {
+    Default = tostring(Settings.JumpOffset.Height),
+    Numeric = true,
+    Finished = true,
+    Text = "Jump Offset Height",
+    Tooltip = "Set jump offset height",
+    Placeholder = "Enter height...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            Settings.JumpOffset.Height = numValue
+            Library:Notify({
+                Title = "Silent Aim",
+                Description = "Jump offset height set to " .. numValue,
+                Time = 2
+            })
+        end
+    end
+})
+
+-- Визуальные настройки
+SilentAimGroup:AddDivider()
+SilentAimGroup:AddLabel("Visual Settings")
+
+SilentAimGroup:AddToggle("SilentAimShowTracer", {
+    Text = "Show Tracer",
+    Default = Settings.Tracer.Enabled,
+    Tooltip = "Enable/Disable aim tracer",
+    Callback = function(Value)
+        Settings.Tracer.Enabled = Value
+        v60.Enabled = Value and v58 ~= nil
+        v63.Enabled = Value and v58 ~= nil
+    end
+})
+
+SilentAimGroup:AddLabel("Tracer Color"):AddColorPicker("SilentAimTracerColor", {
+    Default = Settings.Tracer.Color,
+    Title = "Tracer Color",
+    Callback = function(Value)
+        Settings.Tracer.Color = Value
+        v60.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Value),
+            ColorSequenceKeypoint.new(1, Settings.Tracer.FadeColor)
+        })
+    end
+})
+
+SilentAimGroup:AddLabel("Tracer Fade Color"):AddColorPicker("SilentAimTracerFadeColor", {
+    Default = Settings.Tracer.FadeColor,
+    Title = "Tracer Fade Color",
+    Callback = function(Value)
+        Settings.Tracer.FadeColor = Value
+        v60.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Settings.Tracer.Color),
+            ColorSequenceKeypoint.new(1, Value)
+        })
+    end
+})
+
+SilentAimGroup:AddInput("SilentAimTracerWidth0", {
+    Default = tostring(Settings.Tracer.Width0),
+    Numeric = true,
+    Finished = true,
+    Text = "Tracer Width Start",
+    Tooltip = "Set tracer start width",
+    Placeholder = "Enter width...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            Settings.Tracer.Width0 = numValue
+            v60.Width0 = numValue
+        end
+    end
+})
+
+SilentAimGroup:AddInput("SilentAimTracerWidth1", {
+    Default = tostring(Settings.Tracer.Width1),
+    Numeric = true,
+    Finished = true,
+    Text = "Tracer Width End",
+    Tooltip = "Set tracer end width",
+    Placeholder = "Enter width...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            Settings.Tracer.Width1 = numValue
+            v60.Width1 = numValue
+        end
+    end
+})
+
+SilentAimGroup:AddInput("SilentAimTracerTextureSpeed", {
+    Default = tostring(Settings.Tracer.TextureSpeed),
+    Numeric = true,
+    Finished = true,
+    Text = "Tracer Texture Speed",
+    Tooltip = "Set tracer texture speed",
+    Placeholder = "Enter speed...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            Settings.Tracer.TextureSpeed = numValue
+            v60.TextureSpeed = numValue
+        end
+    end
+})
+
+SilentAimGroup:AddInput("SilentAimTracerBrightnessPulse", {
+    Default = tostring(Settings.Tracer.BrightnessPulse),
+    Numeric = true,
+    Finished = true,
+    Text = "Tracer Brightness Pulse",
+    Tooltip = "Set tracer brightness pulse amplitude",
+    Placeholder = "Enter amplitude...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            Settings.Tracer.BrightnessPulse = numValue
+        end
+    end
+})
+
+SilentAimGroup:AddToggle("SilentAimShowTargetStats", {
+    Text = "Show Target Stats",
+    Default = Settings.TargetStats.Enabled,
+    Tooltip = "Show/Hide target stats GUI",
+    Callback = function(Value)
+        Settings.TargetStats.Enabled = Value
+        v66:Update(v58)
+    end
+})
+
+SilentAimGroup:AddLabel("Stats Background"):AddColorPicker("SilentAimTargetStatsBackgroundColor", {
+    Default = Settings.TargetStats.BackgroundColor,
+    Title = "Stats Background Color",
+    Transparency = Settings.TargetStats.BackgroundTransparency,
+    Callback = function(Value, Transparency)
+        Settings.TargetStats.BackgroundColor = Value
+        Settings.TargetStats.BackgroundTransparency = Transparency
+        if v66.MainFrame then
+            v66.MainFrame.BackgroundColor3 = Value
+            v66.MainFrame.BackgroundTransparency = Transparency
+            v66.MainFrame:FindFirstChildWhichIsA("Frame").BackgroundColor3 = Value
+            v66.MainFrame:FindFirstChildWhichIsA("Frame").BackgroundTransparency = Transparency
+        end
+    end
+})
+
+SilentAimGroup:AddLabel("Health Bar Dark"):AddColorPicker("SilentAimHealthBarDarkColor", {
+    Default = Settings.TargetStats.HealthBar.DarkColor,
+    Title = "Health Bar Dark Color",
+    Callback = function(Value)
+        Settings.TargetStats.HealthBar.DarkColor = Value
+        if v66.HealthBar then
+            v66.HealthBar:FindFirstChildOfClass("UIGradient").Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Value),
+                ColorSequenceKeypoint.new(1, Settings.TargetStats.HealthBar.LightColor)
+            })
+        end
+    end
+})
+
+SilentAimGroup:AddLabel("Health Bar Light"):AddColorPicker("SilentAimHealthBarLightColor", {
+    Default = Settings.TargetStats.HealthBar.LightColor,
+    Title = "Health Bar Light Color",
+    Callback = function(Value)
+        Settings.TargetStats.HealthBar.LightColor = Value
+        if v66.HealthBar then
+            v66.HealthBar:FindFirstChildOfClass("UIGradient").Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Settings.TargetStats.HealthBar.DarkColor),
+                ColorSequenceKeypoint.new(1, Value)
+            })
+        end
+    end
+})
+
+SilentAimGroup:AddLabel("Armor Bar Dark"):AddColorPicker("SilentAimArmorBarDarkColor", {
+    Default = Settings.TargetStats.ArmorBar.DarkColor,
+    Title = "Armor Bar Dark Color",
+    Callback = function(Value)
+        Settings.TargetStats.ArmorBar.DarkColor = Value
+        if v66.ArmorBar then
+            v66.ArmorBar:FindFirstChildOfClass("UIGradient").Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Value),
+                ColorSequenceKeypoint.new(1, Settings.TargetStats.ArmorBar.LightColor)
+            })
+        end
+    end
+})
+
+SilentAimGroup:AddLabel("Armor Bar Light"):AddColorPicker("SilentAimArmorBarLightColor", {
+    Default = Settings.TargetStats.ArmorBar.LightColor,
+    Title = "Armor Bar Light Color",
+    Callback = function(Value)
+        Settings.TargetStats.ArmorBar.LightColor = Value
+        if v66.ArmorBar then
+            v66.ArmorBar:FindFirstChildOfClass("UIGradient").Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Settings.TargetStats.ArmorBar.DarkColor),
+                ColorSequenceKeypoint.new(1, Value)
+            })
+        end
+    end
+})
+
+SilentAimGroup:AddLabel("Damage Particles"):AddColorPicker("SilentAimDamageParticlesColor", {
+    Default = Settings.TargetStats.DamageParticles.Color,
+    Title = "Damage Particles Color",
+    Callback = function(Value)
+        Settings.TargetStats.DamageParticles.Color = Value
+        if v66.DamageParticles then
+            v66.DamageParticles.Color = ColorSequence.new(Value)
+        end
+    end
+})
+
+-- Настройки консоли
+SilentAimGroup:AddDivider()
+SilentAimGroup:AddLabel("Console Settings")
+
+SilentAimGroup:AddToggle("SilentAimShowConsole", {
+    Text = "Show Console",
+    Default = Settings.ConsoleLogger.Enabled,
+    Tooltip = "Show/Hide console logs",
+    Callback = function(Value)
+        Settings.ConsoleLogger.Enabled = Value
+        v67.setVisible(Value)
+    end
+})
+
+SilentAimGroup:AddToggle("SilentAimLogHitlog", {
+    Text = "Log Hitlog",
+    Default = Settings.ConsoleLogger.LogTypes.Hitlog,
+    Tooltip = "Log hits on target",
+    Callback = function(Value)
+        Settings.ConsoleLogger.LogTypes.Hitlog = Value
+    end
+})
+
+SilentAimGroup:AddToggle("SilentAimLogLocalPlayerDamage", {
+    Text = "Log Local Player Damage",
+    Default = Settings.ConsoleLogger.LogTypes.LocalPlayerDamageLog,
+    Tooltip = "Log damage to local player",
+    Callback = function(Value)
+        Settings.ConsoleLogger.LogTypes.LocalPlayerDamageLog = Value
+    end
+})
+
+SilentAimGroup:AddToggle("SilentAimLogLocalPlayerArmor", {
+    Text = "Log Local Player Armor",
+    Default = Settings.ConsoleLogger.LogTypes.LocalPlayerArmorLog,
+    Tooltip = "Log armor changes for local player",
+    Callback = function(Value)
+        Settings.ConsoleLogger.LogTypes.LocalPlayerArmorLog = Value
+    end
+})
+
+SilentAimGroup:AddToggle("SilentAimLogTargetHooked", {
+    Text = "Log Target Hooked",
+    Default = Settings.ConsoleLogger.LogTypes.TargetHookedLog,
+    Tooltip = "Log target lock/unlock events",
+    Callback = function(Value)
+        Settings.ConsoleLogger.LogTypes.TargetHookedLog = Value
+    end
+})
 
 -- Setup ThemeManager and SaveManager
 ThemeManager:SetLibrary(Library)
