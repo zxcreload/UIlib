@@ -2195,9 +2195,6 @@ function ToggleRandomTeleport()
         return
     end
 
-    -- Отладка: выводим текущую цель
-    print("Attempting to toggle desync. TargetPlayerName:", getgenv().StrafeSettings.TargetPlayerName, "Type:", type(getgenv().StrafeSettings.TargetPlayerName))
-
     -- Проверка, что TargetPlayerName — строка
     if getgenv().StrafeSettings.TargetPlayerName and type(getgenv().StrafeSettings.TargetPlayerName) ~= "string" then
         Library:Notify({
@@ -2339,6 +2336,7 @@ TargetDesyncGroup:AddDropdown("DesyncMode", {
 
 -- Выпадающий список для выбора цели
 -- Выпадающий список для выбора цели
+-- Выпадающий список для выбора цели
 local DesyncTargetDropdown = TargetDesyncGroup:AddDropdown("DesyncTarget", {
     SpecialType = "Player",
     Text = "Target Player",
@@ -2347,9 +2345,6 @@ local DesyncTargetDropdown = TargetDesyncGroup:AddDropdown("DesyncTarget", {
     AllowNull = true,
     ExcludeLocalPlayer = true,
     Callback = function(Value)
-        -- Отладка: выводим тип и значение Value
-        print("Dropdown Value:", Value, "Type:", type(Value))
-        
         -- Если Value — это объект Player, берём его имя
         if typeof(Value) == "Instance" and Value:IsA("Player") then
             getgenv().StrafeSettings.TargetPlayerName = Value.Name
