@@ -1870,6 +1870,900 @@ localPlayer.AncestryChanged:Connect(function()
     cleanup()
 end)
 
+-- Target Desync Settings
+local TargetDesyncGroup = Tabs["Combat"]:AddLeftGroupbox("Target Desync Settings")
+
+-- Сервисы
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Workspace = game:GetService("Workspace")
+
+-- Инициализация персонажа
+local Char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HRP = Char:WaitForChild("HumanoidRootPart")
+local Humanoid = Char:WaitForChild("Humanoid")
+local Camera = Workspace.CurrentCamera
+
+-- Настройки призрака
+local GhostSettings = {
+    TorsoSize = Vector3.new(2, 2, 1),
+    HeadSize = Vector3.new(1, 1, 1),
+    LimbSize = Vector3.new(1, 2, 1),
+    Transparency = 0.1,
+    PartColor = BrickColor.new("Light blue"),
+    Material = Enum.Material.ForceField,
+    HighlightFillColor = Color3.fromRGB(0, 170, 255),
+    HighlightOutlineColor = Color3.fromRGB(0, 255, 255),
+    HighlightFillTransparency = 0.8,
+    HighlightOutlineTransparency = 0
+}
+
+-- Настройки Targetstrafe
+getgenv().StrafeSettings = {
+    Enabled = false,
+    Keybind = "H",
+    TargetPlayerName = nil, -- Будет обновляться через UI
+    StrafeMode = "Upwoake", -- Режимы: "Custom", "Random", "Upwoake"
+    StrafeRadius = 10,
+    MinStrafeRadius = 5,
+    SecondsPerRotation = 2,
+    YOffset = 0,
+    UpwoakeHeight = 5,
+    UpwoakeRadius = 8,
+    UpwoakeYSpeed = 1,
+    DesyncAngles = {
+        Enable = true,
+        YawSpeed = 2,
+        PitchSpeed = 1,
+        RollSpeed = 0.5,
+        MaxYawAngle = math.pi/4, -- 45°
+        MaxPitchAngle = math.pi/6, -- 30°
+        MaxRollAngle = math.pi/3 -- 60°
+    },
+    DesyncInterval = 0.0001
+}
+
+-- Переменные для режимов
+local customStrafeAngle = 0
+local upwoakeAngle = 0
+local upwoakeYOffset = 0
+local upwoakeYDirection = 1
+local accumulatedTime = 0
+local angleTime = 0
+
+-- Рассчитываем скорость для Custom
+local StrafeSpeed = (2 * math.pi) / getgenv().StrafeSettings.SecondsPerRotation
+
+local teleportRandomConnection = nil
+local followPart = nil
+local ghostModel = nil
+
+-- Создание FollowPart для камеры
+local function createFollowPart()
+    if followPart then
+        followPart:Destroy()
+    end
+    local part = Instance.new("Part")
+    part.Name = "FollowPart"
+    part.Anchored = true
+    part.CanCollide = false
+    part.Transparency = 1
+    part.Size = Vector3.new(0.1, 0.1, 0.1)
+    part.Parent = Workspace
+    return part
+end
+
+-- Обновление FollowPart при смене персонажа
+local function setupFollowPart(character)
+    followPart = createFollowPart()
+end
+
+-- Создание модели призрака
+local function createGhost()
+    if ghostModel then
+        ghostModel:Destroy()
+    end
+    local model = Instance.new("Model")
+    model.Name = "GhostModel"
+    model.Parent = Workspace
+
+    local torso = Instance.new("Part")
+    torso.Name = "Torso"
+    torso.Size = GhostSettings.TorsoSize
+    torso.Anchored = true
+    torso.CanCollide = false
+    torso.Transparency = GhostSettings.Transparency
+    torso.BrickColor = GhostSettings.PartColor
+    torso.Material = GhostSettings.Material
+    torso.Parent = model
+
+    local head = Instance.new("Part")
+    head.Name = "Head"
+    head.Size = GhostSettings.HeadSize
+    head.Position = torso.Position + Vector3.new(0, 1.5, 0)
+    head.Anchored = true
+    head.CanCollide = false
+    head.Transparency = GhostSettings.Transparency
+    head.BrickColor = GhostSettings.PartColor
+    head.Material = GhostSettings.Material
+    head.Parent = model
+
+    local leftArm = Instance.new("Part")
+    leftArm.Name = "LeftArm"
+    leftArm.Size = GhostSettings.LimbSize
+    leftArm.Position = torso.Position + Vector3.new(-1.5, 0, 0)
+    leftArm.Anchored = true
+    leftArm.CanCollide = false
+    leftArm.Transparency = GhostSettings.Transparency
+    leftArm.BrickColor = GhostSettings.PartColor
+    leftArm.Material = GhostSettings.Material
+    leftArm.Parent = model
+
+    local rightArm = Instance.new("Part")
+    rightArm.Name = "RightArm"
+    rightArm.Size = GhostSettings.LimbSize
+    rightArm.Position = torso.Position + Vector3.new(1.5, 0, 0)
+    rightArm.Anchored = true
+    rightArm.CanCollide = false
+    rightArm.Transparency = GhostSettings.Transparency
+    rightArm.BrickColor = GhostSettings.PartColor
+    rightArm.Material = GhostSettings.Material
+    rightArm.Parent = model
+
+    local leftLeg = Instance.new("Part")
+    leftLeg.Name = "LeftLeg"
+    leftLeg.Size = GhostSettings.LimbSize
+    leftLeg.Position = torso.Position + Vector3.new(-0.5, -2, 0)
+    leftLeg.Anchored = true
+    leftLeg.CanCollide = false
+    leftLeg.Transparency = GhostSettings.Transparency
+    leftLeg.BrickColor = GhostSettings.PartColor
+    leftLeg.Material = GhostSettings.Material
+    leftLeg.Parent = model
+
+    local rightLeg = Instance.new("Part")
+    rightLeg.Name = "RightLeg"
+    rightLeg.Size = GhostSettings.LimbSize
+    rightLeg.Position = torso.Position + Vector3.new(0.5, -2, 0)
+    rightLeg.Anchored = true
+    rightLeg.CanCollide = false
+    rightLeg.Transparency = GhostSettings.Transparency
+    rightLeg.BrickColor = GhostSettings.PartColor
+    rightLeg.Material = GhostSettings.Material
+    rightLeg.Parent = model
+
+    model.PrimaryPart = torso
+
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "GhostHighlight"
+    highlight.FillTransparency = GhostSettings.HighlightFillTransparency
+    highlight.OutlineTransparency = GhostSettings.HighlightOutlineTransparency
+    highlight.FillColor = GhostSettings.HighlightFillColor
+    highlight.OutlineColor = GhostSettings.HighlightOutlineColor
+    highlight.Parent = model
+
+    return model
+end
+
+-- Функция для применения углов к CFrame
+local function applyAngles(cframe, deltaTime)
+    if not getgenv().StrafeSettings.DesyncAngles.Enable then
+        return cframe
+    end
+    
+    angleTime = angleTime + deltaTime
+    
+    local yaw = math.sin(angleTime * getgenv().StrafeSettings.DesyncAngles.YawSpeed) * getgenv().StrafeSettings.DesyncAngles.MaxYawAngle
+    local pitch = math.cos(angleTime * getgenv().StrafeSettings.DesyncAngles.PitchSpeed * 0.7) * getgenv().StrafeSettings.DesyncAngles.MaxPitchAngle
+    local roll = math.sin(angleTime * getgenv().StrafeSettings.DesyncAngles.RollSpeed * 0.5) * getgenv().StrafeSettings.DesyncAngles.MaxRollAngle
+    
+    return cframe * CFrame.Angles(pitch, yaw, roll)
+end
+
+-- Обновление призрака при смене персонажа
+local function setupGhost(character)
+    ghostModel = createGhost()
+end
+
+-- Функция проверки валидности цели
+local function IsTargetValid(targetPlayer)
+    if not targetPlayer or not targetPlayer.Parent then
+        return false, "Target player not found"
+    end
+    if not targetPlayer.Character or not targetPlayer.Character.Parent then
+        return false, "Target character not found"
+    end
+    local targetHRP = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not targetHRP or not targetHRP.Parent then
+        return false, "Target HumanoidRootPart not found"
+    end
+    local targetHumanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not targetHumanoid or targetHumanoid.Health <= 0 then
+        return false, "Target is dead or humanoid missing"
+    end
+    return true, targetHRP
+end
+
+local function TpToPos(deltaTime)
+    if not Char or not HRP or not Humanoid or not Camera or not followPart or not ghostModel then
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Missing required components",
+            Time = 3
+        })
+        return
+    end
+    
+    local originalCFrame = HRP.CFrame
+    local targetPlayer = getgenv().StrafeSettings.TargetPlayerName and Players:FindFirstChild(getgenv().StrafeSettings.TargetPlayerName)
+    local newCFrame
+
+    local isValid, targetHRPOrError = IsTargetValid(targetPlayer)
+    
+    if isValid then
+        local targetHRP = targetHRPOrError
+        if not targetHRP or not targetHRP.Parent then
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Target became invalid during update",
+                Time = 3
+            })
+            ToggleRandomTeleport()
+            return
+        end
+        
+        if getgenv().StrafeSettings.StrafeMode == "Custom" then
+            customStrafeAngle = customStrafeAngle + (StrafeSpeed * deltaTime)
+            local offsetX = math.cos(customStrafeAngle) * getgenv().StrafeSettings.StrafeRadius
+            local offsetZ = math.sin(customStrafeAngle) * getgenv().StrafeSettings.StrafeRadius
+            local position = targetHRP.Position + Vector3.new(offsetX, getgenv().StrafeSettings.YOffset, offsetZ)
+            newCFrame = CFrame.new(position, targetHRP.Position)
+            
+        elseif getgenv().StrafeSettings.StrafeMode == "Random" then
+            local randomAngle = math.random() * 2 * math.pi
+            local randomDistance = math.random(getgenv().StrafeSettings.MinStrafeRadius, getgenv().StrafeSettings.StrafeRadius)
+            local offsetX = math.cos(randomAngle) * randomDistance
+            local offsetZ = math.sin(randomAngle) * randomDistance
+            local position = targetHRP.Position + Vector3.new(offsetX, getgenv().StrafeSettings.YOffset, offsetZ)
+            newCFrame = CFrame.new(position, targetHRP.Position)
+            
+        elseif getgenv().StrafeSettings.StrafeMode == "Upwoake" then
+            upwoakeAngle = upwoakeAngle + (StrafeSpeed * deltaTime)
+            upwoakeYOffset = upwoakeYOffset + (getgenv().StrafeSettings.UpwoakeYSpeed * deltaTime * upwoakeYDirection)
+            
+            if upwoakeYOffset > getgenv().StrafeSettings.UpwoakeHeight then
+                upwoakeYOffset = getgenv().StrafeSettings.UpwoakeHeight
+                upwoakeYDirection = -1
+            elseif upwoakeYOffset < 0 then
+                upwoakeYOffset = 0
+                upwoakeYDirection = 1
+            end
+            
+            local radius = getgenv().StrafeSettings.UpwoakeRadius * math.sqrt(1 - (upwoakeYOffset/getgenv().StrafeSettings.UpwoakeHeight)^2)
+            local offsetX = math.cos(upwoakeAngle) * radius
+            local offsetZ = math.sin(upwoakeAngle) * radius
+            local position = targetHRP.Position + Vector3.new(offsetX, upwoakeYOffset, offsetZ)
+            newCFrame = CFrame.new(position, targetHRP.Position)
+        end
+    else
+        local offsetX = math.random(-10, 10)
+        local offsetZ = math.random(-10, 10)
+        newCFrame = originalCFrame + Vector3.new(offsetX, 0, offsetZ)
+        if getgenv().StrafeSettings.TargetPlayerName then
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Target invalid: " .. tostring(targetHRPOrError) .. ". Using random offset.",
+                Time = 3
+            })
+        end
+    end
+
+    newCFrame = applyAngles(newCFrame, deltaTime)
+
+    if followPart and followPart.Parent then
+        followPart.CFrame = originalCFrame + Vector3.new(0, 1.5, 0)
+    else
+        setupFollowPart(Char)
+        followPart.CFrame = originalCFrame + Vector3.new(0, 1.5, 0)
+    end
+    Camera.CameraSubject = followPart
+
+    if ghostModel and ghostModel.PrimaryPart then
+        ghostModel:SetPrimaryPartCFrame(newCFrame)
+        HRP.CFrame = newCFrame
+        RunService.RenderStepped:Wait()
+        HRP.CFrame = originalCFrame
+    else
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Missing ghost model or primary part",
+            Time = 3
+        })
+    end
+
+    Camera.CameraSubject = Humanoid
+end
+
+function ToggleRandomTeleport()
+    if not getgenv().StrafeSettings.Enabled then
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Please enable Target Desync first!",
+            Time = 3
+        })
+        return
+    end
+
+    -- Отладка: выводим текущую цель
+    print("Attempting to toggle desync. TargetPlayerName:", getgenv().StrafeSettings.TargetPlayerName, "Type:", type(getgenv().StrafeSettings.TargetPlayerName))
+
+    -- Проверка, что TargetPlayerName — строка
+    if getgenv().StrafeSettings.TargetPlayerName and type(getgenv().StrafeSettings.TargetPlayerName) ~= "string" then
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Invalid target name type: " .. type(getgenv().StrafeSettings.TargetPlayerName),
+            Time = 3
+        })
+        getgenv().StrafeSettings.TargetPlayerName = nil
+        DesyncTargetDropdown:SetValue(nil)
+        return
+    end
+
+    local targetPlayer = getgenv().StrafeSettings.TargetPlayerName and Players:FindFirstChild(getgenv().StrafeSettings.TargetPlayerName)
+    
+    -- Проверка на nil перед вызовом IsTargetValid
+    if getgenv().StrafeSettings.TargetPlayerName and not targetPlayer then
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Player " .. tostring(getgenv().StrafeSettings.TargetPlayerName) .. " not found in Players list",
+            Time = 3
+        })
+        getgenv().StrafeSettings.TargetPlayerName = nil
+        DesyncTargetDropdown:SetValue(nil)
+        return
+    end
+
+    local isValid, errorMsg = IsTargetValid(targetPlayer)
+    
+    if not isValid and getgenv().StrafeSettings.TargetPlayerName then
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Cannot enable: " .. tostring(errorMsg),
+            Time = 3
+        })
+        getgenv().StrafeSettings.TargetPlayerName = nil
+        DesyncTargetDropdown:SetValue(nil)
+        return
+    end
+
+    if teleportRandomConnection then
+        teleportRandomConnection:Disconnect()
+        teleportRandomConnection = nil
+        if followPart then
+            followPart:Destroy()
+            followPart = nil
+        end
+        if ghostModel then
+            ghostModel:Destroy()
+            ghostModel = nil
+        end
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Desync Disabled",
+            Time = 3
+        })
+    else
+        if not targetPlayer then
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "No target selected. Using random offset.",
+                Time = 3
+            })
+        end
+        setupFollowPart(Char)
+        setupGhost(Char)
+        accumulatedTime = 0
+        upwoakeYOffset = 0
+        angleTime = 0
+        StrafeSpeed = (2 * math.pi) / getgenv().StrafeSettings.SecondsPerRotation
+        teleportRandomConnection = RunService.Heartbeat:Connect(function(deltaTime)
+            if HRP.Velocity.Magnitude > 0 then
+                accumulatedTime = accumulatedTime + deltaTime
+                if accumulatedTime >= getgenv().StrafeSettings.DesyncInterval then
+                    TpToPos(deltaTime)
+                    accumulatedTime = accumulatedTime - getgenv().StrafeSettings.DesyncInterval
+                end
+            end
+        end)
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Desync Enabled in mode: " .. getgenv().StrafeSettings.StrafeMode,
+            Time = 3
+        })
+    end
+end
+
+-- Обработчик появления нового персонажа
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    Char = newCharacter
+    HRP = Char:WaitForChild("HumanoidRootPart")
+    Humanoid = Char:WaitForChild("Humanoid")
+    if teleportRandomConnection then
+        setupFollowPart(newCharacter)
+        setupGhost(newCharacter)
+    end
+end)
+
+-- UI Elements for Target Desync
+local DesyncToggle = TargetDesyncGroup:AddToggle("DesyncEnabled", {
+    Text = "Enable Target Desync",
+    Default = getgenv().StrafeSettings.Enabled,
+    Tooltip = "Enable/Disable Target Desync",
+    Callback = function(Value)
+        getgenv().StrafeSettings.Enabled = Value
+        if not Value and teleportRandomConnection then
+            ToggleRandomTeleport()
+        end
+    end
+})
+
+local DesyncKeybind = DesyncToggle:AddKeyPicker("DesyncKeybind", {
+    Default = getgenv().StrafeSettings.Keybind,
+    Mode = "Toggle",
+    Text = "Desync Key",
+    NoUI = false,
+    Callback = function(Value)
+        ToggleRandomTeleport()
+    end,
+    ChangedCallback = function(NewKey)
+        getgenv().StrafeSettings.Keybind = tostring(NewKey):lower()
+    end
+})
+
+TargetDesyncGroup:AddDropdown("DesyncMode", {
+    Values = {"Custom", "Random", "Upwoake"},
+    Default = getgenv().StrafeSettings.StrafeMode,
+    Multi = false,
+    Text = "Desync Mode",
+    Tooltip = "Select desync movement type",
+    Callback = function(Value)
+        getgenv().StrafeSettings.StrafeMode = Value
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Mode changed to " .. Value,
+            Time = 3
+        })
+    end
+})
+
+-- Выпадающий список для выбора цели
+-- Выпадающий список для выбора цели
+local DesyncTargetDropdown = TargetDesyncGroup:AddDropdown("DesyncTarget", {
+    SpecialType = "Player",
+    Text = "Target Player",
+    Tooltip = "Select target player for desync",
+    Multi = false,
+    AllowNull = true,
+    ExcludeLocalPlayer = true,
+    Callback = function(Value)
+        -- Отладка: выводим тип и значение Value
+        print("Dropdown Value:", Value, "Type:", type(Value))
+        
+        -- Если Value — это объект Player, берём его имя
+        if typeof(Value) == "Instance" and Value:IsA("Player") then
+            getgenv().StrafeSettings.TargetPlayerName = Value.Name
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Target set to " .. Value.Name,
+                Time = 3
+            })
+        elseif type(Value) == "string" then
+            getgenv().StrafeSettings.TargetPlayerName = Value
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Target set to " .. Value,
+                Time = 3
+            })
+        else
+            getgenv().StrafeSettings.TargetPlayerName = nil
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Target cleared",
+                Time = 3
+            })
+        end
+    end
+})
+
+-- Strafe settings
+TargetDesyncGroup:AddInput("StrafeRadius", {
+    Default = tostring(getgenv().StrafeSettings.StrafeRadius),
+    Numeric = true,
+    Finished = true,
+    Text = "Strafe Radius",
+    Tooltip = "Radius for Custom/Random modes (studs)",
+    Placeholder = "Enter radius...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 1 then
+            getgenv().StrafeSettings.StrafeRadius = numValue
+        else
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Please enter a valid number >= 1!",
+                Time = 2
+            })
+        end
+    end
+})
+
+TargetDesyncGroup:AddInput("MinStrafeRadius", {
+    Default = tostring(getgenv().StrafeSettings.MinStrafeRadius),
+    Numeric = true,
+    Finished = true,
+    Text = "Min Strafe Radius",
+    Tooltip = "Minimum radius for Random mode (studs)",
+    Placeholder = "Enter min radius...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 1 then
+            getgenv().StrafeSettings.MinStrafeRadius = numValue
+        else
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Please enter a valid number >= 1!",
+                Time = 2
+            })
+        end
+    end
+})
+
+TargetDesyncGroup:AddInput("SecondsPerRotation", {
+    Default = tostring(getgenv().StrafeSettings.SecondsPerRotation),
+    Numeric = true,
+    Finished = true,
+    Text = "Seconds per Rotation",
+    Tooltip = "Time for one full rotation (seconds)",
+    Placeholder = "Enter seconds...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue > 0 then
+            getgenv().StrafeSettings.SecondsPerRotation = numValue
+            StrafeSpeed = (2 * math.pi) / getgenv().StrafeSettings.SecondsPerRotation
+        else
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Please enter a valid number > 0!",
+                Time = 2
+            })
+        end
+    end
+})
+
+TargetDesyncGroup:AddInput("YOffset", {
+    Default = tostring(getgenv().StrafeSettings.YOffset),
+    Numeric = true,
+    Finished = true,
+    Text = "Y Offset",
+    Tooltip = "Vertical offset for Custom/Random modes (studs)",
+    Placeholder = "Enter offset...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            getgenv().StrafeSettings.YOffset = numValue
+        else
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Please enter a valid number!",
+                Time = 2
+            })
+        end
+    end
+})
+
+TargetDesyncGroup:AddInput("UpwoakeHeight", {
+    Default = tostring(getgenv().StrafeSettings.UpwoakeHeight),
+    Numeric = true,
+    Finished = true,
+    Text = "Upwoake Height",
+    Tooltip = "Max height for Upwoake mode (studs)",
+    Placeholder = "Enter height...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 0 then
+            getgenv().StrafeSettings.UpwoakeHeight = numValue
+        else
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Please enter a valid number >= 0!",
+                Time = 2
+            })
+        end
+    end
+})
+
+TargetDesyncGroup:AddInput("UpwoakeRadius", {
+    Default = tostring(getgenv().StrafeSettings.UpwoakeRadius),
+    Numeric = true,
+    Finished = true,
+    Text = "Upwoake Radius",
+    Tooltip = "Radius for Upwoake mode (studs)",
+    Placeholder = "Enter radius...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 1 then
+            getgenv().StrafeSettings.UpwoakeRadius = numValue
+        else
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Please enter a valid number >= 1!",
+                Time = 2
+            })
+        end
+    end
+})
+
+TargetDesyncGroup:AddInput("UpwoakeYSpeed", {
+    Default = tostring(getgenv().StrafeSettings.UpwoakeYSpeed),
+    Numeric = true,
+    Finished = true,
+    Text = "Upwoake Y Speed",
+    Tooltip = "Vertical speed for Upwoake mode",
+    Placeholder = "Enter speed...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 0 then
+            getgenv().StrafeSettings.UpwoakeYSpeed = numValue
+        else
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Please enter a valid number >= 0!",
+                Time = 2
+            })
+        end
+    end
+})
+
+-- Desync Angles settings
+local DesyncAnglesToggle = TargetDesyncGroup:AddToggle("DesyncAnglesEnabled", {
+    Text = "Enable Desync Angles",
+    Default = getgenv().StrafeSettings.DesyncAngles.Enable,
+    Tooltip = "Enable angle manipulation for desync",
+    Callback = function(Value)
+        getgenv().StrafeSettings.DesyncAngles.Enable = Value
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Desync Angles: " .. (Value and "Enabled" or "Disabled"),
+            Time = 3
+        })
+    end
+})
+
+TargetDesyncGroup:AddSlider("YawSpeed", {
+    Text = "Yaw Speed",
+    Default = getgenv().StrafeSettings.DesyncAngles.YawSpeed,
+    Min = 0,
+    Max = 20,
+    Rounding = 1,
+    Compact = false,
+    Callback = function(Value)
+        getgenv().StrafeSettings.DesyncAngles.YawSpeed = Value
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Yaw Speed set to: " .. Value,
+            Time = 2
+        })
+    end
+})
+
+TargetDesyncGroup:AddSlider("PitchSpeed", {
+    Text = "Pitch Speed",
+    Default = getgenv().StrafeSettings.DesyncAngles.PitchSpeed,
+    Min = 0,
+    Max = 20,
+    Rounding = 1,
+    Compact = false,
+    Callback = function(Value)
+        getgenv().StrafeSettings.DesyncAngles.PitchSpeed = Value
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Pitch Speed set to: " .. Value,
+            Time = 2
+        })
+    end
+})
+
+TargetDesyncGroup:AddSlider("RollSpeed", {
+    Text = "Roll Speed",
+    Default = getgenv().StrafeSettings.DesyncAngles.RollSpeed,
+    Min = 0,
+    Max = 20,
+    Rounding = 1,
+    Compact = false,
+    Callback = function(Value)
+        getgenv().StrafeSettings.DesyncAngles.RollSpeed = Value
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Roll Speed set to: " .. Value,
+            Time = 2
+        })
+    end
+})
+
+TargetDesyncGroup:AddSlider("MaxYawAngle", {
+    Text = "Max Yaw Angle",
+    Default = math.deg(getgenv().StrafeSettings.DesyncAngles.MaxYawAngle),
+    Min = 0,
+    Max = 180,
+    Rounding = 0,
+    Suffix = "°",
+    Compact = false,
+    Callback = function(Value)
+        getgenv().StrafeSettings.DesyncAngles.MaxYawAngle = math.rad(Value)
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Max Yaw Angle set to: " .. Value .. "°",
+            Time = 2
+        })
+    end
+})
+
+TargetDesyncGroup:AddSlider("MaxPitchAngle", {
+    Text = "Max Pitch Angle",
+    Default = math.deg(getgenv().StrafeSettings.DesyncAngles.MaxPitchAngle),
+    Min = 0,
+    Max = 180,
+    Rounding = 0,
+    Suffix = "°",
+    Compact = false,
+    Callback = function(Value)
+        getgenv().StrafeSettings.DesyncAngles.MaxPitchAngle = math.rad(Value)
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Max Pitch Angle set to: " .. Value .. "°",
+            Time = 2
+        })
+    end
+})
+
+TargetDesyncGroup:AddSlider("MaxRollAngle", {
+    Text = "Max Roll Angle",
+    Default = math.deg(getgenv().StrafeSettings.DesyncAngles.MaxRollAngle),
+    Min = 0,
+    Max = 180,
+    Rounding = 0,
+    Suffix = "°",
+    Compact = false,
+    Callback = function(Value)
+        getgenv().StrafeSettings.DesyncAngles.MaxRollAngle = math.rad(Value)
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Max Roll Angle set to: " .. Value .. "°",
+            Time = 2
+        })
+    end
+})
+
+-- Target death check and cleanup
+RunService.Heartbeat:Connect(function()
+    if getgenv().StrafeSettings.Enabled and teleportRandomConnection then
+        local targetPlayer = getgenv().StrafeSettings.TargetPlayerName and Players:FindFirstChild(getgenv().StrafeSettings.TargetPlayerName)
+        local isValid, errorMsg = IsTargetValid(targetPlayer)
+        if not isValid then
+            ToggleRandomTeleport()
+            if getgenv().StrafeSettings.TargetPlayerName then
+                Library:Notify({
+                    Title = "Target Desync",
+                    Description = "Desync disabled: " .. tostring(errorMsg),
+                    Time = 3
+                })
+                getgenv().StrafeSettings.TargetPlayerName = nil
+                DesyncTargetDropdown:SetValue(nil)
+            end
+        end
+    end
+end)
+
+-- Cleanup on player exit
+LocalPlayer.AncestryChanged:Connect(function()
+    if teleportRandomConnection then
+        ToggleRandomTeleport()
+    end
+end)
+
+-- Команды для управления в чате
+LocalPlayer.Chatted:Connect(function(message)
+    local args = message:lower():split(" ")
+    
+    if args[1] == "/mode" and args[2] then
+        local newMode = args[2]:gsub("^%l", string.upper)
+        if newMode == "Custom" or newMode == "Random" or newMode == "Upwoake" then
+            getgenv().StrafeSettings.StrafeMode = newMode
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Mode changed to " .. newMode,
+                Time = 3
+            })
+        else
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Invalid mode! Use Custom, Random, or Upwoake",
+                Time = 3
+            })
+        end
+        
+    elseif args[1] == "/angles" then
+        getgenv().StrafeSettings.DesyncAngles.Enable = not getgenv().StrafeSettings.DesyncAngles.Enable
+        Library:Notify({
+            Title = "Target Desync",
+            Description = "Desync Angles: " .. (getgenv().StrafeSettings.DesyncAngles.Enable and "Enabled" or "Disabled"),
+            Time = 3
+        })
+        DesyncAnglesToggle:SetValue(getgenv().StrafeSettings.DesyncAngles.Enable)
+        
+    elseif args[1] == "/setangle" and args[2] and args[3] then
+        local angleType = args[2]:lower()
+        local value = tonumber(args[3])
+        
+        if angleType == "yaw" then
+            getgenv().StrafeSettings.DesyncAngles.MaxYawAngle = math.rad(value)
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Max Yaw Angle set to: " .. value .. "°",
+                Time = 2
+            })
+        elseif angleType == "pitch" then
+            getgenv().StrafeSettings.DesyncAngles.MaxPitchAngle = math.rad(value)
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Max Pitch Angle set to: " .. value .. "°",
+                Time = 2
+            })
+        elseif angleType == "roll" then
+            getgenv().StrafeSettings.DesyncAngles.MaxRollAngle = math.rad(value)
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Max Roll Angle set to: " .. value .. "°",
+                Time = 2
+            })
+        end
+        
+    elseif args[1] == "/setspeed" and args[2] and args[3] then
+        local speedType = args[2]:lower()
+        local value = tonumber(args[3])
+        
+        if speedType == "yaw" then
+            getgenv().StrafeSettings.DesyncAngles.YawSpeed = value
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Yaw Speed set to: " .. value,
+                Time = 2
+            })
+        elseif speedType == "pitch" then
+            getgenv().StrafeSettings.DesyncAngles.PitchSpeed = value
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Pitch Speed set to: " .. value,
+                Time = 2
+            })
+        elseif speedType == "roll" then
+            getgenv().StrafeSettings.DesyncAngles.RollSpeed = value
+            Library:Notify({
+                Title = "Target Desync",
+                Description = "Roll Speed set to: " .. value,
+                Time = 2
+            })
+        end
+    end
+end)
+
+-- Инициализация
+if Char then
+    setupFollowPart(Char)
+    setupGhost(Char)
+end
+
 -- Setup ThemeManager and SaveManager
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
