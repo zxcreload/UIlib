@@ -2825,61 +2825,35 @@ local Settings = {
 
 -- Создание консоли
 local function createConsole()
-    local TextService = game:GetService("TextService")
-    
     local ScreenGui = Instance.new("ScreenGui")
-    ScreenGui.Name = "TitanCX_Console"
+    ScreenGui.Name = "ConsoleGui"
     ScreenGui.ResetOnSpawn = false
-    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-    
+    ScreenGui.Parent = game.CoreGui
+
     local MainFrame = Instance.new("Frame")
-    MainFrame.Size = UDim2.new(0, 300, 0, 200)
-    MainFrame.Position = UDim2.new(0, 50, 0, 50)
-    MainFrame.BackgroundColor3 = Color3.fromRGB(70, 70, 73)
+    MainFrame.Size = UDim2.new(0, 400, 0, 300)
+    MainFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 48)
     MainFrame.BorderSizePixel = 0
     MainFrame.Parent = ScreenGui
-    
-    local Border = Instance.new("ImageLabel")
-    Border.Size = UDim2.new(1, 20, 1, 20)
-    Border.Position = UDim2.new(0, -10, 0, -10)
-    Border.BackgroundTransparency = 1
-    Border.Image = "rbxassetid://1316045217"
-    Border.ImageColor3 = Color3.fromRGB(0, 0, 0)
-    Border.ImageTransparency = 0.5
-    Border.ScaleType = Enum.ScaleType.Slice
-    Border.SliceCenter = Rect.new(10, 10, 10, 10)
-    Border.Parent = MainFrame
-    
+
     local TitleBar = Instance.new("Frame")
     TitleBar.Size = UDim2.new(1, 0, 0, 30)
-    TitleBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    TitleBar.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
     TitleBar.BorderSizePixel = 0
     TitleBar.Parent = MainFrame
-    
-    local UICorner = Instance.new("UICorner")
-    UICorner.CornerRadius = UDim.new(0, 10)
-    UICorner.Parent = TitleBar
-    
-    local UIGradient = Instance.new("UIGradient")
-    UIGradient.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 215, 0)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 105, 180))
-    })
-    UIGradient.Rotation = 90
-    UIGradient.Parent = TitleBar
-    
+
     local TitleLabel = Instance.new("TextLabel")
-    TitleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+    TitleLabel.Size = UDim2.new(1, -90, 1, 0)
     TitleLabel.Position = UDim2.new(0, 10, 0, 0)
     TitleLabel.BackgroundTransparency = 1
-    TitleLabel.Text = "TitanCX console"
+    TitleLabel.Text = "Silent Aim Console"
     TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     TitleLabel.TextSize = 14
-    TitleLabel.Font = Enum.Font.Gotham
+    TitleLabel.Font = Enum.Font.GothamBold
     TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    TitleLabel.TextYAlignment = Enum.TextYAlignment.Center
     TitleLabel.Parent = TitleBar
-    
+
     local ButtonSize = UDim2.new(0, 45, 0, 30)
     local MaximizeButton = Instance.new("TextButton")
     MaximizeButton.Size = ButtonSize
@@ -2887,28 +2861,28 @@ local function createConsole()
     MaximizeButton.BackgroundTransparency = 1
     MaximizeButton.Text = ""
     MaximizeButton.Parent = TitleBar
-    
+
     local MaximizeIcon = Instance.new("ImageLabel")
     MaximizeIcon.Size = UDim2.new(0, 20, 0, 20)
     MaximizeIcon.Position = UDim2.new(0.5, -10, 0.5, -10)
     MaximizeIcon.BackgroundTransparency = 1
     MaximizeIcon.Image = "rbxassetid://81207376475342"
     MaximizeIcon.Parent = MaximizeButton
-    
+
     local CloseButton = Instance.new("TextButton")
     CloseButton.Size = ButtonSize
     CloseButton.Position = UDim2.new(1, -45, 0, 0)
     CloseButton.BackgroundTransparency = 1
     CloseButton.Text = ""
     CloseButton.Parent = TitleBar
-    
+
     local CloseIcon = Instance.new("ImageLabel")
     CloseIcon.Size = UDim2.new(0, 20, 0, 20)
     CloseIcon.Position = UDim2.new(0.5, -10, 0.5, -10)
     CloseIcon.BackgroundTransparency = 1
     CloseIcon.Image = "rbxassetid://100234668796385"
     CloseIcon.Parent = CloseButton
-    
+
     local LogFrame = Instance.new("ScrollingFrame")
     LogFrame.Size = UDim2.new(1, -10, 1, -55)
     LogFrame.Position = UDim2.new(0, 5, 0, 35)
@@ -2916,27 +2890,27 @@ local function createConsole()
     LogFrame.ScrollBarThickness = 4
     LogFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     LogFrame.Parent = MainFrame
-    
+
     local UIListLayout = Instance.new("UIListLayout")
     UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
     UIListLayout.Parent = LogFrame
-    
+
     local Footer = Instance.new("Frame")
     Footer.Size = UDim2.new(1, 0, 0, 20)
     Footer.Position = UDim2.new(0, 0, 1, -20)
     Footer.BackgroundColor3 = Color3.fromRGB(90, 90, 97)
     Footer.BorderSizePixel = 0
     Footer.Parent = MainFrame
-    
+
     local FooterLabel = Instance.new("TextLabel")
     FooterLabel.Size = UDim2.new(1, 0, 1, 0)
     FooterLabel.BackgroundTransparency = 1
     FooterLabel.Text = "cursed by 32vision"
-    FooterLabel.TextColor3 = Color PurgatoryRGB(220, 220, 220)
+    FooterLabel.TextColor3 = Color3.fromRGB(220, 220, 220) -- Исправлено: Color PurgatoryRGB на Color3.fromRGB
     FooterLabel.TextSize = 14
     FooterLabel.Font = Enum.Font.Gotham
     FooterLabel.Parent = Footer
-    
+
     local function addLog(text)
         local LogLabel = Instance.new("TextLabel")
         LogLabel.Size = UDim2.new(1, 0, 0, 20)
@@ -2949,7 +2923,7 @@ local function createConsole()
         LogLabel.TextXAlignment = Enum.TextXAlignment.Left
         LogLabel.TextWrapped = true
         LogLabel.Parent = LogFrame
-        
+
         local function updateLabelSize()
             local textBounds = TextService:GetTextSize(
                 LogLabel.Text,
@@ -2960,12 +2934,12 @@ local function createConsole()
             local lines = math.ceil(textBounds.X / (LogFrame.AbsoluteSize.X - 10))
             LogLabel.Size = UDim2.new(1, 0, 0, math.max(20, lines * 20))
         end
-        
+
         updateLabelSize()
         LogFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
         LogFrame.CanvasPosition = Vector2.new(0, UIListLayout.AbsoluteContentSize.Y)
     end
-    
+
     local isDragging = false
     local dragStart = nil
     local startPos = nil
@@ -2976,20 +2950,20 @@ local function createConsole()
             startPos = MainFrame.Position
         end
     end)
-    
+
     UserInputService.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement and isDragging then
             local delta = input.Position - dragStart
             MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
-    
+
     UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             isDragging = false
         end
     end)
-    
+
     local isResizing = false
     local resizeStart = nil
     local startSize = nil
@@ -2999,7 +2973,7 @@ local function createConsole()
     ResizeButton.BackgroundTransparency = 1
     ResizeButton.Text = ""
     ResizeButton.Parent = MainFrame
-    
+
     local ResizeIcon = Instance.new("ImageLabel")
     ResizeIcon.Size = UDim2.new(0, 20, 0, 20)
     ResizeIcon.Position = UDim2.new(1, -20, 1, -20)
@@ -3007,7 +2981,7 @@ local function createConsole()
     ResizeIcon.Image = "rbxassetid://6014261993"
     ResizeIcon.ImageColor3 = Color3.fromRGB(200, 200, 200)
     ResizeIcon.Parent = MainFrame
-    
+
     local function updateAllLabels()
         for _, label in pairs(LogFrame:GetChildren()) do
             if label:IsA("TextLabel") then
@@ -3023,7 +2997,7 @@ local function createConsole()
         end
         LogFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
     end
-    
+
     ResizeButton.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             isResizing = true
@@ -3031,7 +3005,7 @@ local function createConsole()
             startSize = MainFrame.Size
         end
     end)
-    
+
     UserInputService.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseMovement and isResizing then
             local delta = input.Position - resizeStart
@@ -3041,13 +3015,13 @@ local function createConsole()
             updateAllLabels()
         end
     end)
-    
+
     UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             isResizing = false
         end
     end)
-    
+
     local isMaximized = false
     local originalSize = MainFrame.Size
     local originalPos = MainFrame.Position
@@ -3067,14 +3041,14 @@ local function createConsole()
         end
         updateAllLabels()
     end)
-    
+
     CloseButton.MouseButton1Click:Connect(function()
         MainFrame.Visible = false
         if Toggles.SilentAimShowConsole then
             Toggles.SilentAimShowConsole:SetValue(false)
         end
     end)
-    
+
     local function applyHoverEffect(button, hoverColor)
         button.MouseEnter:Connect(function()
             button.BackgroundColor3 = hoverColor
@@ -3084,10 +3058,10 @@ local function createConsole()
             button.BackgroundTransparency = 1
         end)
     end
-    
+
     applyHoverEffect(MaximizeButton, Color3.fromRGB(0, 100, 195))
     applyHoverEffect(CloseButton, Color3.fromRGB(232, 17, 35))
-    
+
     return {
         addLog = addLog,
         setVisible = function(visible)
