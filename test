@@ -3737,7 +3737,7 @@ local function v110()
             local v128 = v111.MainFrame.Position + UDim2.new(0, v127.X, 0, v127.Y)
             local v129 = v54:GetScreenResolution()
             v128 = UDim2.new(math.clamp(v128.X.Scale, 0, 1 - v111.MainFrame.Size.X.Scale), v128.X.Offset, math.clamp(v128.Y.Scale, 0, 1 - v111.MainFrame.Size.Y.Scale), v128.Y.Offset)
-            local v130 = TweenInfo.new(getgenv().SilentAimSettings.TargetStats.Drag.Smoothness, getgenv().SilentAimSettings.TargetStats.Animation.EasingStyle, getgenv().SilentAimSettings.TargetStats.Animation.EasingDirection)
+            local v130 = TweenInfo.new(getgenv().SilentAimSettings.TargetStats.Drag.Smoothness, getgenv().SilentAimSettings.TargetStats.Animation.EasingStyle, getgenv().SilentAimSettings.TargetStats.Animation.EVDirection)
             local v131 = v53:Create(v111.MainFrame, v130, { Position = v128 })
             v131:Play()
             v111.Tweens["Drag"] = v131
@@ -3767,8 +3767,6 @@ local function v110()
             local v134 = v132.Character.Humanoid
             local v135 = v134.Health / v134.MaxHealth
             local v136 = 0
-ソーシャルメディア
-
             local v137 = workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild(v132.Name) and workspace.Players[v132.Name]:FindFirstChild("BodyEffects") and workspace.Players[v132.Name].BodyEffects:FindFirstChild("Armor")
             if v137 then v136 = v137.Value / 100 end
             local v138 = TweenInfo.new(getgenv().SilentAimSettings.TargetStats.Animation.TweenTime, getgenv().SilentAimSettings.TargetStats.Animation.EasingStyle, getgenv().SilentAimSettings.TargetStats.Animation.EasingDirection)
