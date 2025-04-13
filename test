@@ -21,12 +21,13 @@ local Tabs = {
     HUD = Window:AddTab("HUD", "monitor"),
 }
 
--- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local GuiService = game:GetService("GuiService")
+local TweenService = game:GetService("TweenService")
+local TextService = game:GetService("TextService") -- Добавляем TextService
 
 -- Local variables
 local LocalPlayer = Players.LocalPlayer
