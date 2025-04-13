@@ -3937,13 +3937,14 @@ game:BindToClose(function()
     end
 end)
 
--- Настройка ThemeManager и SaveManager
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({"MenuKeybind"})
+SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
+
 ThemeManager:SetFolder("ClickGUI")
 SaveManager:SetFolder("ClickGUI/settings")
+
 SaveManager:BuildConfigSection(Tabs["HUD"])
 ThemeManager:ApplyToTab(Tabs["HUD"])
 
