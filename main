@@ -3684,11 +3684,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 Time = 2
             })
             if Settings.ConsoleLogger.LogTypes.TargetHookedLog then
-                local time = os.date("%H:%M:%S")
-                console.addLog(string.format(
-                    'TargetHookedLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Status: Unhooked',
-                    target.Name, time
-                ))
+                -- ... (логика логов) ...
             end
             if healthLogConnection then
                 healthLogConnection:Disconnect()
@@ -3705,6 +3701,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             tracerParticles.Enabled = false
             jumpTime = 0
             targetState = "Ground"
+            if targetStatsGui then
+                targetStatsGui:Update(nil, 0) -- Сброс GUI
+            end
         end
     end
 end)
