@@ -1,0 +1,869 @@
+local Settings = {
+    Keybind = Enum.KeyCode.V,
+    PredictionFactor = 0.141245121,
+    PredictionMode = "Velocity",
+    JumpOffset = {TimeThreshold = 3, Height = 2},
+    Tracer = {
+        Color = Color3.fromRGB(255, 50, 50),
+        FadeColor = Color3.fromRGB(255, 150, 150),
+        Width0 = 0.2,
+        Width1 = 0.1,
+        Texture = "rbxassetid://7151778301",
+        TextureSpeed = 2,
+        LightEmission = 1,
+        LightInfluence = 0,
+        BrightnessPulse = 0.3
+    },
+    Particles = {
+        Color = Color3.fromRGB(255, 50, 50),
+        Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 0)}),
+        Lifetime = NumberRange.new(0.3, 0.5),
+        Rate = 50,
+        Speed = NumberRange.new(2, 5),
+        SpreadAngle = Vector2.new(-30, 30)
+    },
+    TargetStats = {
+        FrameSize = UDim2.new(0, 300, 0, 120),
+        BackgroundColor = Color3.fromRGB(15, 15, 15),
+        BackgroundTransparency = 0.3,
+        GradientColors = {Start = Color3.fromRGB(255, 105, 180), End = Color3.fromRGB(255, 255, 0)},
+        HealthBar = {
+            DarkColor = Color3.fromRGB(200, 0, 0),
+            LightColor = Color3.fromRGB(255, 69, 0),
+            Size = UDim2.new(0.65, 0, 0.15, 0),
+            Position = UDim2.new(0.3, 5, 0.35, 0)
+        },
+        ArmorBar = {
+            DarkColor = Color3.fromRGB(0, 0, 200),
+            LightColor = Color3.fromRGB(30, 144, 255),
+            Size = UDim2.new(0.65, 0, 0.15, 0),
+            Position = UDim2.new(0.3, 5, 0.55, 0)
+        },
+        Avatar = {Size = UDim2.new(0.25, 0, 0.5, 0), Position = UDim2.new(0.03, 0, 0.25, 0)},
+        PositionLabel = {Size = UDim2.new(0.65, 0, 0.15, 0), Position = UDim2.new(0.3, 5, 0.75, 0)},
+        Animation = {TweenTime = 0.3, EasingStyle = Enum.EasingStyle.Quad, EasingDirection = Enum.EasingDirection.Out},
+        Drag = {Sensitivity = 2, Smoothness = 0.015},
+        DamageParticles = {
+            Color = Color3.fromRGB(255, 50, 50),
+            Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 0)}),
+            Lifetime = NumberRange.new(0.5, 0.7),
+            Rate = 30,
+            Speed = NumberRange.new(2, 4),
+            SpreadAngle = Vector2.new(-60, 60)
+        }
+    },
+    ConsoleLogger = {
+        EnabledOnStart = true,
+        LogTypes = {Hitlog = true, LocalPlayerDamageLog = true, LocalPlayerArmorLog = true, TargetHookedLog = true}
+    }
+}
+
+local v1=(function()
+local v2=game:GetService("Players")
+local v3=v2.LocalPlayer
+local v4=v3:WaitForChild("PlayerGui")
+local v5=game:GetService("UserInputService")
+local v6=Instance.new("ScreenGui")
+v6.Name="TitanCX"
+v6.ResetOnSpawn=false
+v6.Parent=v4
+local v7=Instance.new("Frame")
+v7.Size=UDim2.new(0,300,0,200)
+v7.Position=UDim2.new(0,50,0,50)
+v7.BackgroundColor3=Color3.fromRGB(70,70,73)
+v7.BorderSizePixel=0
+v7.Parent=v6
+local v8=Instance.new("ImageLabel")
+v8.Size=UDim2.new(1,20,1,20)
+v8.Position=UDim2.new(0,-10,0,-10)
+v8.BackgroundTransparency=1
+v8.Image="rbxassetid://1316045217"
+v8.ImageColor3=Color3.fromRGB(0,0,0)
+v8.ImageTransparency=0.5
+v8.ScaleType=Enum.ScaleType.Slice
+v8.SliceCenter=Rect.new(10,10,10,10)
+v8.Parent=v7
+local v9=Instance.new("Frame")
+v9.Size=UDim2.new(1,0,0,30)
+v9.BackgroundColor3=Color3.fromRGB(255,255,255)
+v9.BorderSizePixel=0
+v9.Parent=v7
+local v10=Instance.new("UICorner")
+v10.CornerRadius=UDim.new(0,10)
+v10.Parent=v9
+local v11=Instance.new("UIGradient")
+v11.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,215,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(255,105,180))})
+v11.Rotation=90
+v11.Parent=v9
+local v12=Instance.new("TextLabel")
+v12.Size=UDim2.new(0.7,0,1,0)
+v12.Position=UDim2.new(0,10,0,0)
+v12.BackgroundTransparency=1
+v12.Text="TitanCX console"
+v12.TextColor3=Color3.fromRGB(255,255,255)
+v12.TextSize=14
+v12.Font=Enum.Font.Gotham
+v12.TextXAlignment=Enum.TextXAlignment.Left
+v12.TextYAlignment=Enum.TextYAlignment.Center
+v12.Parent=v9
+local v13=UDim2.new(0,45,0,30)
+local v14=Instance.new("TextButton")
+v14.Size=v13
+v14.Position=UDim2.new(1,-90,0,0)
+v14.BackgroundTransparency=1
+v14.Text=""
+v14.Parent=v9
+local v15=Instance.new("ImageLabel")
+v15.Size=UDim2.new(0,20,0,20)
+v15.Position=UDim2.new(0.5,-10,0.5,-10)
+v15.BackgroundTransparency=1
+v15.Image="rbxassetid://81207376475342"
+v15.Parent=v14
+local v16=Instance.new("TextButton")
+v16.Size=v13
+v16.Position=UDim2.new(1,-45,0,0)
+v16.BackgroundTransparency=1
+v16.Text=""
+v16.Parent=v9
+local v17=Instance.new("ImageLabel")
+v17.Size=UDim2.new(0,20,0,20)
+v17.Position=UDim2.new(0.5,-10,0.5,-10)
+v17.BackgroundTransparency=1
+v17.Image="rbxassetid://100234668796385"
+v17.Parent=v16
+local v18=Instance.new("ScrollingFrame")
+v18.Size=UDim2.new(1,-10,1,-55)
+v18.Position=UDim2.new(0,5,0,35)
+v18.BackgroundTransparency=1
+v18.ScrollBarThickness=4
+v18.CanvasSize=UDim2.new(0,0,0,0)
+v18.Parent=v7
+local v19=Instance.new("UIListLayout")
+v19.SortOrder=Enum.SortOrder.LayoutOrder
+v19.Parent=v18
+local v20=Instance.new("Frame")
+v20.Size=UDim2.new(1,0,0,20)
+v20.Position=UDim2.new(0,0,1,-20)
+v20.BackgroundColor3=Color3.fromRGB(90,90,97)
+v20.BorderSizePixel=0
+v20.Parent=v7
+local v21=Instance.new("TextLabel")
+v21.Size=UDim2.new(1,0,1,0)
+v21.BackgroundTransparency=1
+v21.Text="cursed by 32vision"
+v21.TextColor3=Color3.fromRGB(220,220,220)
+v21.TextSize=14
+v21.Font=Enum.Font.Gotham
+v21.Parent=v20
+local function v22(v23)
+local v24=Instance.new("TextLabel")
+v24.Size=UDim2.new(1,0,0,20)
+v24.BackgroundTransparency=1
+v24.RichText=true
+v24.Text=v23
+v24.TextColor3=Color3.fromRGB(255,255,255)
+v24.TextSize=14
+v24.Font=Enum.Font.GothamBold
+v24.TextXAlignment=Enum.TextXAlignment.Left
+v24.TextWrapped=true
+v24.Parent=v18
+local v25=v24.TextBounds
+local v26=math.ceil(v25.X/(v18.AbsoluteSize.X-10))
+v24.Size=UDim2.new(1,0,0,math.max(20,v26*20))
+v18.CanvasSize=UDim2.new(0,0,0,v19.AbsoluteContentSize.Y)
+v18.CanvasPosition=Vector2.new(0,v19.AbsoluteContentSize.Y)
+end
+local v27=false
+local v28=nil
+local v29=nil
+v9.InputBegan:Connect(function(v30)
+if v30.UserInputType==Enum.UserInputType.MouseButton1 then
+v27=true
+v28=v30.Position
+v29=v7.Position
+end
+end)
+v5.InputChanged:Connect(function(v30)
+if v30.UserInputType==Enum.UserInputType.MouseMovement and v27 then
+local v31=v30.Position-v28
+v7.Position=UDim2.new(v29.X.Scale,v29.X.Offset+v31.X,v29.Y.Scale,v29.Y.Offset+v31.Y)
+end
+end)
+v5.InputEnded:Connect(function(v30)
+if v30.UserInputType==Enum.UserInputType.MouseButton1 then
+v27=false
+end
+end)
+local v32=false
+local v33=nil
+local v34=nil
+local v35=Instance.new("TextButton")
+v35.Size=UDim2.new(0,20,0,20)
+v35.Position=UDim2.new(1,-20,1,-20)
+v35.BackgroundTransparency=1
+v35.Text=""
+v35.Parent=v7
+local v36=Instance.new("ImageLabel")
+v36.Size=UDim2.new(0,20,0,20)
+v36.Position=UDim2.new(1,-20,1,-20)
+v36.BackgroundTransparency=1
+v36.Image="rbxassetid://6014261993"
+v36.ImageColor3=Color3.fromRGB(200,200,200)
+v36.Parent=v7
+v35.InputBegan:Connect(function(v30)
+if v30.UserInputType==Enum.UserInputType.MouseButton1 then
+v32=true
+v33=v30.Position
+v34=v7.Size
+end
+end)
+v5.InputChanged:Connect(function(v30)
+if v30.UserInputType==Enum.UserInputType.MouseMovement and v32 then
+local v31=v30.Position-v33
+local v37=math.max(200,v34.X.Offset+v31.X)
+local v38=math.max(150,v34.Y.Offset+v31.Y)
+v7.Size=UDim2.new(0,v37,0,v38)
+for _,v39 in pairs(v18:GetChildren())do
+if v39:IsA("TextLabel")then
+local v40=v39.TextBounds
+local v41=math.ceil(v40.X/(v18.AbsoluteSize.X-10))
+v39.Size=UDim2.new(1,0,0,math.max(20,v41*20))
+end
+end
+v18.CanvasSize=UDim2.new(0,0,0,v19.AbsoluteContentSize.Y)
+end
+end)
+v5.InputEnded:Connect(function(v30)
+if v30.UserInputType==Enum.UserInputType.MouseButton1 then
+v32=false
+end
+end)
+local v42=false
+local v43=v7.Size
+local v44=v7.Position
+v14.MouseButton1Click:Connect(function()
+if v42 then
+v7.Size=v43
+v7.Position=v44
+v15.Image="rbxassetid://81207376475342"
+v42=false
+else
+v43=v7.Size
+v44=v7.Position
+v7.Size=UDim2.new(1,0,1,0)
+v7.Position=UDim2.new(0,0,0,0)
+v15.Image="rbxassetid://84930406585654"
+v42=true
+end
+end)
+v16.MouseButton1Click:Connect(function()
+v7.Visible=false
+end)
+local function v45(v46,v47)
+v46.MouseEnter:Connect(function()
+v46.BackgroundColor3=v47
+v46.BackgroundTransparency=0
+end)
+v46.MouseLeave:Connect(function()
+v46.BackgroundTransparency=1
+end)
+end
+v45(v14,Color3.fromRGB(0,100,195))
+v45(v16,Color3.fromRGB(232,17,35))
+return{addLog=v22,setVisible=function(v48)v7.Visible=v48 end}
+end)()
+
+local v49=game:GetService("UserInputService")
+local v50=game:GetService("Players")
+local v51=game:GetService("ReplicatedStorage")
+local v52=game:GetService("RunService")
+local v53=game:GetService("TweenService")
+local v54=game:GetService("GuiService")
+local v55=v50.LocalPlayer
+local v56=workspace.CurrentCamera
+local v57=v55:GetMouse()
+local v58=nil
+local v59=v55.Character
+local v60=nil
+local v61=nil
+local v62=nil
+local v63=nil
+local v64=0
+local v65="Ground"
+local v66=nil
+local v67=v1
+local v68=nil
+local v69=nil
+local v70=nil
+local v71=nil
+local v72=nil
+local v73=nil
+
+local function v74()
+if v60 then
+v60:Destroy()
+v61:Destroy()
+v62:Destroy()
+v63:Destroy()
+end
+v61=Instance.new("Attachment")
+v62=Instance.new("Attachment")
+v61.Name="TracerStart"
+v62.Name="TracerEnd"
+v60=Instance.new("Beam")
+v60.Name="AimTracer"
+v60.Attachment0=v61
+v60.Attachment1=v62
+v60.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Settings.Tracer.Color),ColorSequenceKeypoint.new(1,Settings.Tracer.FadeColor)})
+v60.LightEmission=Settings.Tracer.LightEmission
+v60.LightInfluence=Settings.Tracer.LightInfluence
+v60.Width0=Settings.Tracer.Width0
+v60.Width1=Settings.Tracer.Width1
+v60.Texture=Settings.Tracer.Texture
+v60.TextureSpeed=Settings.Tracer.TextureSpeed
+v60.Enabled=false
+v60.Parent=workspace.Terrain
+v63=Instance.new("ParticleEmitter")
+v63.Color=ColorSequence.new(Settings.Particles.Color)
+v63.Size=Settings.Particles.Size
+v63.Lifetime=Settings.Particles.Lifetime
+v63.Rate=Settings.Particles.Rate
+v63.Speed=Settings.Particles.Speed
+v63.SpreadAngle=Settings.Particles.SpreadAngle
+v63.Enabled=false
+v63.Parent=v62
+end
+
+local function v75(v76)
+if not v76 or not v76.Character then return nil end
+local v77=v76.Character:FindFirstChild("Humanoid")
+local v78=v76.Character:FindFirstChild("HumanoidRootPart")
+if not v77 or not v78 then return nil end
+local v79=0
+local v80=workspace:FindFirstChild("Players")and workspace.Players:FindFirstChild(v76.Name)and workspace.Players[v76.Name]:FindFirstChild("BodyEffects")and workspace.Players[v76.Name].BodyEffects:FindFirstChild("Armor")
+if v80 then v79=v80.Value end
+return{Name=v76.Name,Health=v77.Health,MaxHealth=v77.MaxHealth,Armor=v79,Position=v78.Position,Distance=(v78.Position-(v59 and v59.HumanoidRootPart and v59.HumanoidRootPart.Position or Vector3.new())).Magnitude,Status=v65}
+end
+
+local function v81(v82)
+if v82 then
+print(string.format("Target: %s | Health: %.1f/%.1f | Armor: %.1f | Distance: %.2f studs | Position: (%.2f, %.2f, %.2f) | Status: %s",v82.Name,v82.Health,v82.MaxHealth,v82.Armor,v82.Distance,v82.Position.X,v82.Position.Y,v82.Position.Z,v82.Status))
+else
+print("No target information available")
+end
+end
+
+local function v83()
+local v84,v85=nil,math.huge
+for _,v86 in pairs(v50:GetPlayers())do
+if v86~=v55 and v86.Character then
+local v87=v86.Character:FindFirstChild("Humanoid")
+local v88=v86.Character:FindFirstChild("HumanoidRootPart")
+if v87 and v88 and v87.Health>0 then
+local v89,v90=v56:WorldToScreenPoint(v88.Position)
+if v90 then
+local v91=(Vector2.new(v89.X,v89.Y)-Vector2.new(v57.X,v57.Y)).Magnitude
+if v91<v85 then
+v85=v91
+v84=v86
+end
+end
+end
+end
+end
+return v84
+end
+
+local function v92(v93)
+if v58 and v58.Character and v58.Character:FindFirstChild("Humanoid")then
+local v94=v58.Character.Humanoid
+local v95=v94.FloorMaterial==Enum.Material.Air
+if v95 then
+v64=v64+v93
+if v64>Settings.JumpOffset.TimeThreshold then
+v65="Fly"
+else
+v65="Jumped"
+end
+else
+v64=0
+v65="Ground"
+end
+else
+v64=0
+v65="Ground"
+end
+end
+
+local v96,v97
+
+local function v98(v99,v100)
+if not v99 or not v100 then return v99 and v99.Position or Vector3.new()end
+local v101=v99.Position
+local v102=v99.Velocity
+if v65=="Jumped"then
+local v103=v101+Vector3.new(0,Settings.JumpOffset.Height,0)
+if Settings.PredictionMode=="Velocity"then
+return v103+v102*Settings.PredictionFactor
+end
+return v103
+end
+if Settings.PredictionMode=="Velocity"then
+return v101+Vector3.new(v102.X*Settings.PredictionFactor,v102.Y*Settings.PredictionFactor,v102.Z*Settings.PredictionFactor)
+elseif Settings.PredictionMode=="MoveDirection"then
+if v100.MoveDirection~=Vector3.new()then
+return v101+(v100.MoveDirection.Unit*(Settings.PredictionFactor*10))
+end
+return v101
+elseif Settings.PredictionMode=="CalculateCFrame"then
+local v104=tick()
+local v105=v104-(v97 or v104)
+if not v96 or(v101-v96).Magnitude<0.001 then
+v96=v101
+v97=v104
+return v101
+end
+local v106=(v101-v96).Magnitude
+local v107=(v106/v105)*(0.1*(Settings.PredictionFactor*10))
+local v108=v101+(v101-v96).Unit*v107
+local v109=(v101.Y-v96.Y)/v105*(0.1*Settings.PredictionFactor)
+v108=v108+Vector3.new(0,v109,0)
+v97=v104
+v96=v101
+return v108
+end
+return v101
+end
+
+local function v110()
+local v111={ScreenGui=nil,MainFrame=nil,HealthBar=nil,ArmorBar=nil,NameLabel=nil,AvatarImage=nil,PositionLabel=nil,HealthText=nil,ArmorText=nil,DamageParticles=nil,IsDragging=false,LastMousePos=nil,Tweens={},Connections={},LastHealth=nil,LastArmor=nil,HealthConnection=nil,ArmorConnection=nil}
+v111.ScreenGui=Instance.new("ScreenGui")
+v111.ScreenGui.Name="TargetStatsGui"
+v111.ScreenGui.ResetOnSpawn=false
+v111.ScreenGui.IgnoreGuiInset=true
+v111.ScreenGui.Parent=v55:WaitForChild("PlayerGui")
+v111.MainFrame=Instance.new("Frame")
+v111.MainFrame.Size=Settings.TargetStats.FrameSize
+v111.MainFrame.Position=UDim2.new(0.5,-150,0.5,-60)
+v111.MainFrame.BackgroundColor3=Settings.TargetStats.BackgroundColor
+v111.MainFrame.BackgroundTransparency=Settings.TargetStats.BackgroundTransparency
+v111.MainFrame.BorderSizePixel=0
+v111.MainFrame.Visible=false
+v111.MainFrame.Parent=v111.ScreenGui
+local v112=Instance.new("UICorner")
+v112.CornerRadius=UDim.new(0,8)
+v112.Parent=v111.MainFrame
+local v113=Instance.new("Frame")
+v113.Size=UDim2.new(1,6,1,6)
+v113.Position=UDim2.new(0,-3,0,-3)
+v113.BackgroundTransparency=0
+v113.BorderSizePixel=0
+v113.Parent=v111.MainFrame
+local v114=Instance.new("UIGradient")
+v114.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(255,105,180)),ColorSequenceKeypoint.new(1,Color3.fromRGB(255,255,0))})
+v114.Rotation=45
+v114.Parent=v113
+local v115=Instance.new("Frame")
+v115.Size=UDim2.new(1,-6,1,-6)
+v115.Position=UDim2.new(0,3,0,3)
+v115.BackgroundColor3=Settings.TargetStats.BackgroundColor
+v115.BackgroundTransparency=Settings.TargetStats.BackgroundTransparency
+v115.BorderSizePixel=0
+v115.Parent=v113
+local v116=Instance.new("UICorner")
+v116.CornerRadius=UDim.new(0,8)
+v116.Parent=v115
+v111.AvatarImage=Instance.new("ImageLabel")
+v111.AvatarImage.Size=Settings.TargetStats.Avatar.Size
+v111.AvatarImage.Position=Settings.TargetStats.Avatar.Position
+v111.AvatarImage.BackgroundTransparency=1
+v111.AvatarImage.Image="rbxasset://textures/ui/GuiImagePlaceholder.png"
+v111.AvatarImage.ScaleType=Enum.ScaleType.Fit
+v111.AvatarImage.Parent=v111.MainFrame
+local v117=Instance.new("UICorner")
+v117.CornerRadius=UDim.new(0,8)
+v117.Parent=v111.AvatarImage
+local v118=Instance.new("Frame")
+v118.Size=Settings.TargetStats.HealthBar.Size
+v118.Position=Settings.TargetStats.HealthBar.Position
+v118.BackgroundColor3=Color3.fromRGB(30,30,30)
+v118.BorderSizePixel=0
+v118.Parent=v111.MainFrame
+v111.HealthBar=Instance.new("Frame")
+v111.HealthBar.Size=UDim2.new(1,0,1,0)
+v111.HealthBar.BackgroundTransparency=0
+v111.HealthBar.BorderSizePixel=0
+v111.HealthBar.Parent=v118
+local v119=Instance.new("UICorner")
+v119.CornerRadius=UDim.new(0,4)
+v119.Parent=v118
+local v120=Instance.new("UIGradient")
+v120.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Settings.TargetStats.HealthBar.DarkColor),ColorSequenceKeypoint.new(1,Settings.TargetStats.HealthBar.LightColor)})
+v120.Rotation=45
+v120.Parent=v111.HealthBar
+v111.HealthText=Instance.new("TextLabel")
+v111.HealthText.Size=UDim2.new(1,0,1,0)
+v111.HealthText.Position=UDim2.new(0,0,0,0)
+v111.HealthText.BackgroundTransparency=1
+v111.HealthText.TextColor3=Color3.fromRGB(255,255,255)
+v111.HealthText.TextScaled=true
+v111.HealthText.Font=Enum.Font.GothamBlack
+v111.HealthText.Text="100"
+v111.HealthText.TextStrokeTransparency=0.5
+v111.HealthText.TextStrokeColor3=Color3.fromRGB(0,0,0)
+v111.HealthText.Parent=v118
+local v121=Instance.new("Frame")
+v121.Size=Settings.TargetStats.ArmorBar.Size
+v121.Position=Settings.TargetStats.ArmorBar.Position
+v121.BackgroundColor3=Color3.fromRGB(30,30,30)
+v121.BorderSizePixel=0
+v121.Parent=v111.MainFrame
+v111.ArmorBar=Instance.new("Frame")
+v111.ArmorBar.Size=UDim2.new(1,0,1,0)
+v111.ArmorBar.BackgroundTransparency=0
+v111.ArmorBar.BorderSizePixel=0
+v111.ArmorBar.Parent=v121
+local v122=Instance.new("UICorner")
+v122.CornerRadius=UDim.new(0,4)
+v122.Parent=v121
+local v123=Instance.new("UIGradient")
+v123.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Settings.TargetStats.ArmorBar.DarkColor),ColorSequenceKeypoint.new(1,Settings.TargetStats.ArmorBar.LightColor)})
+v123.Rotation=45
+v123.Parent=v111.ArmorBar
+v111.ArmorText=Instance.new("TextLabel")
+v111.ArmorText.Size=UDim2.new(1,0,1,0)
+v111.ArmorText.Position=UDim2.new(0,0,0,0)
+v111.ArmorText.BackgroundTransparency=1
+v111.ArmorText.TextColor3=Color3.fromRGB(255,255,255)
+v111.ArmorText.TextScaled=true
+v111.ArmorText.Font=Enum.Font.GothamBlack
+v111.ArmorText.Text="100"
+v111.ArmorText.TextStrokeTransparency=0.5
+v111.ArmorText.TextStrokeColor3=Color3.fromRGB(0,0,0)
+v111.ArmorText.Parent=v121
+v111.NameLabel=Instance.new("TextLabel")
+v111.NameLabel.Size=UDim2.new(0.65,0,0.2,0)
+v111.NameLabel.Position=UDim2.new(0.3,5,0.1,0)
+v111.NameLabel.BackgroundTransparency=1
+v111.NameLabel.TextColor3=Color3.fromRGB(255,255,255)
+v111.NameLabel.TextScaled=true
+v111.NameLabel.TextSize=20
+v111.NameLabel.Font=Enum.Font.GothamBlack
+v111.NameLabel.Text="No Target"
+v111.NameLabel.TextStrokeTransparency=0.5
+v111.NameLabel.TextStrokeColor3=Color3.fromRGB(0,0,0)
+v111.NameLabel.Parent=v111.MainFrame
+v111.PositionLabel=Instance.new("TextLabel")
+v111.PositionLabel.Size=Settings.TargetStats.PositionLabel.Size
+v111.PositionLabel.Position=Settings.TargetStats.PositionLabel.Position
+v111.PositionLabel.BackgroundTransparency=1
+v111.PositionLabel.TextColor3=Color3.fromRGB(255,255,255)
+v111.PositionLabel.TextScaled=true
+v111.PositionLabel.Font=Enum.Font.GothamBlack
+v111.PositionLabel.Text="Position: 0, 0, 0"
+v111.PositionLabel.TextStrokeTransparency=0.5
+v111.PositionLabel.TextStrokeColor3=Color3.fromRGB(0,0,0)
+v111.PositionLabel.Parent=v111.MainFrame
+v111.DamageParticles=Instance.new("ParticleEmitter")
+v111.DamageParticles.Color=ColorSequence.new(Settings.TargetStats.DamageParticles.Color)
+v111.DamageParticles.Size=Settings.TargetStats.DamageParticles.Size
+v111.DamageParticles.Lifetime=Settings.TargetStats.DamageParticles.Lifetime
+v111.DamageParticles.Rate=Settings.TargetStats.DamageParticles.Rate
+v111.DamageParticles.Speed=Settings.TargetStats.DamageParticles.Speed
+v111.DamageParticles.SpreadAngle=Settings.TargetStats.DamageParticles.SpreadAngle
+v111.DamageParticles.Enabled=false
+v111.DamageParticles.Parent=v111.MainFrame
+local function v124(v125)
+if v111.IsDragging and v111.MainFrame then
+local v126=v125.Position
+local v127=v126-v111.LastMousePos
+local v128=v111.MainFrame.Position+UDim2.new(0,v127.X,0,v127.Y)
+local v129=v54:GetScreenResolution()
+v128=UDim2.new(math.clamp(v128.X.Scale,0,1-v111.MainFrame.Size.X.Scale),v128.X.Offset,math.clamp(v128.Y.Scale,0,1-v111.MainFrame.Size.Y.Scale),v128.Y.Offset)
+local v130=TweenInfo.new(Settings.TargetStats.Drag.Smoothness,Settings.TargetStats.Animation.EasingStyle,Settings.TargetStats.Animation.EasingDirection)
+local v131=v53:Create(v111.MainFrame,v130,{Position=v128})
+v131:Play()
+v111.Tweens["Drag"]=v131
+v111.LastMousePos=v126
+end
+end
+v111.Connections[#v111.Connections+1]=v111.MainFrame.InputBegan:Connect(function(v125)
+if v125.UserInputType==Enum.UserInputType.MouseButton1 or v125.UserInputType==Enum.UserInputType.Touch then
+v111.IsDragging=true
+v111.LastMousePos=v125.Position
+end
+end)
+v111.Connections[#v111.Connections+1]=v111.MainFrame.InputEnded:Connect(function(v125)
+if v125.UserInputType==Enum.UserInputType.MouseButton1 or v125.UserInputType==Enum.UserInputType.Touch then
+v111.IsDragging=false
+end
+end)
+v111.Connections[#v111.Connections+1]=v49.InputChanged:Connect(function(v125)
+if v125.UserInputType==Enum.UserInputType.MouseMovement or v125.UserInputType==Enum.UserInputType.Touch then
+v124(v125)
+end
+end)
+function v111:Update(v132,v133)
+if not self.MainFrame then return end
+if v132 and v132.Character and v132.Character:FindFirstChild("Humanoid")then
+self.MainFrame.Visible=true
+local v134=v132.Character.Humanoid
+local v135=v134.Health/v134.MaxHealth
+local v136=0
+local v137=workspace:FindFirstChild("Players")and workspace.Players:FindFirstChild(v132.Name)and workspace.Players[v132.Name]:FindFirstChild("BodyEffects")and workspace.Players[v132.Name].BodyEffects:FindFirstChild("Armor")
+if v137 then v136=v137.Value/100 end
+local v138=TweenInfo.new(Settings.TargetStats.Animation.TweenTime,Settings.TargetStats.Animation.EasingStyle,Settings.TargetStats.Animation.EasingDirection)
+if self.Tweens["Health"]then
+self.Tweens["Health"]:Cancel()
+end
+local v139=v53:Create(self.HealthBar,v138,{Size=UDim2.new(math.clamp(v135,0,1),0,1,0)})
+v139:Play()
+self.Tweens["Health"]=v139
+if self.Tweens["Armor"]then
+self.Tweens["Armor"]:Cancel()
+end
+local v140=v53:Create(self.ArmorBar,v138,{Size=UDim2.new(math.clamp(v136,0,1),0,1,0)})
+v140:Play()
+self.Tweens["Armor"]=v140
+self.HealthText.Text=tostring(math.floor(v134.Health))
+self.ArmorText.Text=tostring(math.floor(v137 and v137.Value or 0))
+self.NameLabel.Text=v132.Name
+local v141=v132.Character:FindFirstChild("HumanoidRootPart")
+if v141 then
+local v142=v141.Position
+self.PositionLabel.Text=string.format("Position: %.1f, %.1f, %.1f",v142.X,v142.Y,v142.Z)
+end
+local v143=v132.UserId
+self.AvatarImage.Image=string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=150&height=150&format=png",v143)
+else
+self.MainFrame.Visible=false
+self.NameLabel.Text="No Target"
+self.AvatarImage.Image="rbxasset://textures/ui/GuiImagePlaceholder.png"
+self.PositionLabel.Text="Position: 0, 0, 0"
+self.HealthText.Text="0"
+self.ArmorText.Text="0"
+self.LastHealth=nil
+self.LastArmor=nil
+if self.HealthConnection then
+self.HealthConnection:Disconnect()
+self.HealthConnection=nil
+end
+if self.ArmorConnection then
+self.ArmorConnection:Disconnect()
+self.ArmorConnection=nil
+end
+end
+end
+function v111:Destroy()
+for _,v144 in pairs(self.Tweens)do
+if v144 then v144:Cancel()end
+end
+for _,v145 in pairs(self.Connections)do
+v145:Disconnect()
+end
+if self.HealthConnection then
+self.HealthConnection:Disconnect()
+self.HealthConnection=nil
+end
+if self.ArmorConnection then
+self.ArmorConnection:Disconnect()
+self.ArmorConnection=nil
+end
+if self.ScreenGui then
+self.ScreenGui:Destroy()
+end
+self.MainFrame=nil
+self.HealthBar=nil
+self.ArmorBar=nil
+self.NameLabel=nil
+self.AvatarImage=nil
+self.PositionLabel=nil
+self.HealthText=nil
+self.ArmorText=nil
+self.DamageParticles=nil
+self.Tweens={}
+self.Connections={}
+end
+return v111
+end
+
+local function v146(v147)
+v92(v147)
+if v58 and v58.Character and v58.Character:FindFirstChild("HumanoidRootPart")and v59 and v59:FindFirstChild("HumanoidRootPart")then
+local v148=v59.HumanoidRootPart
+local v149=v58.Character.HumanoidRootPart
+local v150=v149.Velocity
+local v151=v98(v149,v58.Character.Humanoid)
+v61.Parent=v148
+v61.WorldPosition=v148.Position
+v62.Parent=workspace.Terrain
+v62.WorldPosition=v151
+v60.Enabled=true
+v63.Enabled=true
+v60.Brightness=1+Settings.Tracer.BrightnessPulse*math.sin(tick()*5)
+else
+v60.Enabled=false
+v63.Enabled=false
+end
+if v66 then
+v66:Update(v58,v147)
+end
+end
+
+local function v152(v153)
+if v70 then
+v70:Disconnect()
+v70=nil
+end
+if v71 then
+v71:Disconnect()
+v71=nil
+end
+v72=nil
+v73=nil
+if not v153 or not v153.Character then return end
+local v154=v153.Character:FindFirstChild("Humanoid")
+if v154 and Settings.ConsoleLogger.LogTypes.Hitlog then
+v72=v154.Health
+v70=v154.HealthChanged:Connect(function(v155)
+if v72 and v155<v72 then
+local v156=os.date("%H:%M:%S")
+local v157=0
+local v158=workspace:FindFirstChild("Players")and workspace.Players:FindFirstChild(v153.Name)and workspace.Players[v153.Name]:FindFirstChild("BodyEffects")and workspace.Players[v153.Name].BodyEffects:FindFirstChild("Armor")
+if v158 then v157=v158.Value end
+v67.addLog(string.format('Hitlog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>, Armor: <font color="rgb(0,0,255)">%.1f</font>',v153.Name,v156,v155,v157))
+end
+v72=v155
+end)
+end
+local v158=workspace:FindFirstChild("Players")and workspace.Players:FindFirstChild(v153.Name)and workspace.Players[v153.Name]:FindFirstChild("BodyEffects")and workspace.Players[v153.Name].BodyEffects:FindFirstChild("Armor")
+if v158 and Settings.ConsoleLogger.LogTypes.Hitlog then
+v73=v158.Value
+v71=v158:GetPropertyChangedSignal("Value"):Connect(function()
+local v159=v158.Value
+if v72 and v73 and v159<v73 then
+local v160=os.date("%H:%M:%S")
+v67.addLog(string.format('Hitlog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>, Armor: <font color="rgb(0,0,255)">%.1f</font>',v153.Name,v160,v72,v159))
+end
+v73=v159
+end)
+end
+end
+
+v49.InputBegan:Connect(function(v161,v162)
+if v162 then return end
+if v161.KeyCode==Settings.Keybind then
+if v58==nil then
+v58=v83()
+if v58 then
+warn("Locked on to: "..v58.Name)
+local v163=v75(v58)
+v81(v163)
+v60.Enabled=true
+v63.Enabled=true
+v152(v58)
+if Settings.ConsoleLogger.LogTypes.TargetHookedLog then
+local v164=os.date("%H:%M:%S")
+local v165=v163 and string.format("%.2f",v163.Distance)or"N/A"
+v67.addLog(string.format('TargetHookedLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Distance: %s',v58.Name,v164,v165))
+end
+else
+warn("No target found")
+v60.Enabled=false
+v63.Enabled=false
+end
+else
+warn("Unlocked from: "..v58.Name)
+if Settings.ConsoleLogger.LogTypes.TargetHookedLog then
+local v164=os.date("%H:%M:%S")
+v67.addLog(string.format('TargetHookedLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Status: Unhooked',v58.Name,v164))
+end
+if v70 then
+v70:Disconnect()
+v70=nil
+end
+if v71 then
+v71:Disconnect()
+v71=nil
+end
+v72=nil
+v73=nil
+v58=nil
+v60.Enabled=false
+v63.Enabled=false
+v64=0
+v65="Ground"
+end
+end
+end)
+
+local function v166(v167)
+v59=v167
+local v168=v167:FindFirstChild("Humanoid")
+if v168 then
+v68=v168.Health
+if Settings.ConsoleLogger.LogTypes.LocalPlayerDamageLog then
+v168.HealthChanged:Connect(function(v169)
+if v68 and v169<v68 then
+local v170=os.date("%H:%M:%S")
+v67.addLog(string.format('LocalPlayerDamageLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>',v55.Name,v170,v169))
+end
+v68=v169
+end)
+end
+end
+local v171=workspace:FindFirstChild("Players")and workspace.Players:FindFirstChild(v55.Name)and workspace.Players[v55.Name]:FindFirstChild("BodyEffects")and workspace.Players[v55.Name].BodyEffects:FindFirstChild("Armor")
+if v171 then
+v69=v171.Value
+if Settings.ConsoleLogger.LogTypes.LocalPlayerArmorLog then
+v171:GetPropertyChangedSignal("Value"):Connect(function()
+local v172=v171.Value
+if v69 and v172<v69 then
+local v173=os.date("%H:%M:%S")
+v67.addLog(string.format('LocalPlayerArmorLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Armor: <font color="rgb(0,0,255)">%.1f</font>',v55.Name,v173,v172))
+end
+v69=v172
+end)
+end
+end
+v167.ChildAdded:Connect(function(v174)
+if v174:IsA("Tool")then
+v174.Activated:Connect(function()
+if v58 and v58.Character and v58.Character:FindFirstChild("HumanoidRootPart")then
+local v175=v58.Character.HumanoidRootPart
+local v176=v175.Velocity
+local v177=v98(v175,v176)
+v51.MainEvent:FireServer("UpdateMousePos",v177)
+local v178=v75(v58)
+v81(v178)
+end
+end)
+end
+end)
+end
+
+v74()
+v66=v110()
+v67.setVisible(Settings.ConsoleLogger.EnabledOnStart)
+if v59 then
+v166(v59)
+end
+v55.CharacterAdded:Connect(v166)
+v52.RenderStepped:Connect(v146)
+game:BindToClose(function()
+if v60 then
+v60:Destroy()
+v61:Destroy()
+v62:Destroy()
+v63:Destroy()
+end
+if v66 then
+v66:Destroy()
+end
+if v70 then
+v70:Disconnect()
+end
+if v71 then
+v71:Disconnect()
+end
+end)
