@@ -21,12 +21,13 @@ local Tabs = {
     HUD = Window:AddTab("HUD", "monitor"),
 }
 
--- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local GuiService = game:GetService("GuiService")
+local TweenService = game:GetService("TweenService")
+local TextService = game:GetService("TextService") -- Добавляем TextService
 
 -- Local variables
 local LocalPlayer = Players.LocalPlayer
@@ -2758,6 +2759,1368 @@ if Char then
     setupFollowPart(Char)
     setupGhost(Char)
 end
+
+-- Настройки Silent Aim
+local Settings = {
+    Enabled = false,
+    Keybind = Enum.KeyCode.V,
+    PredictionFactor = 0.141245121,
+    PredictionMode = "Velocity",
+    JumpOffset = {Height = 2},
+    Tracer = {
+        Enabled = true,
+        Color = Color3.fromRGB(255, 50, 50),
+        FadeColor = Color3.fromRGB(255, 150, 150),
+        Width0 = 0.2,
+        Width1 = 0.1,
+        Texture = "rbxassetid://7151778301",
+        TextureSpeed = 2,
+        LightEmission = 1,
+        LightInfluence = 0,
+        BrightnessPulse = 0.3
+    },
+    Particles = {
+        Color = Color3.fromRGB(255, 50, 50),
+        Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.1), NumberSequenceKeypoint.new(1, 0)}),
+        Lifetime = NumberRange.new(0.3, 0.5),
+        Rate = 50,
+        Speed = NumberRange.new(2, 5),
+        SpreadAngle = Vector2.new(-30, 30)
+    },
+    TargetStats = {
+        Enabled = true,
+        FrameSize = UDim2.new(0, 300, 0, 120),
+        BackgroundColor = Color3.fromRGB(15, 15, 15),
+        BackgroundTransparency = 0.3,
+        GradientColors = {Start = Color3.fromRGB(255, 105, 180), End = Color3.fromRGB(255, 255, 0)},
+        HealthBar = {
+            DarkColor = Color3.fromRGB(200, 0, 0),
+            LightColor = Color3.fromRGB(255, 69, 0),
+            Size = UDim2.new(0.65, 0, 0.15, 0),
+            Position = UDim2.new(0.3, 5, 0.35, 0)
+        },
+        ArmorBar = {
+            DarkColor = Color3.fromRGB(0, 0, 200),
+            LightColor = Color3.fromRGB(30, 144, 255),
+            Size = UDim2.new(0.65, 0, 0.15, 0),
+            Position = UDim2.new(0.3, 5, 0.55, 0)
+        },
+        Avatar = {Size = UDim2.new(0.25, 0, 0.5, 0), Position = UDim2.new(0.03, 0, 0.25, 0)},
+        PositionLabel = {Size = UDim2.new(0.65, 0, 0.15, 0), Position = UDim2.new(0.3, 5, 0.75, 0)},
+        Animation = {TweenTime = 0.3, EasingStyle = Enum.EasingStyle.Quad, EasingDirection = Enum.EasingDirection.Out},
+        Drag = {Sensitivity = 2, Smoothness = 0.015},
+        DamageParticles = {
+            Color = Color3.fromRGB(255, 50, 50),
+            Size = NumberSequence.new({NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 0)}),
+            Lifetime = NumberRange.new(0.5, 0.7),
+            Rate = 30,
+            Speed = NumberRange.new(2, 4),
+            SpreadAngle = Vector2.new(-60, 60)
+        }
+    },
+    ConsoleLogger = {
+        Enabled = false,
+        LogTypes = {Hitlog = true, LocalPlayerDamageLog = true, LocalPlayerArmorLog = true, TargetHookedLog = true}
+    }
+}
+
+-- Создание консоли
+local function createConsole()
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "ConsoleGui"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.Parent = game.CoreGui
+
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Size = UDim2.new(0, 400, 0, 300)
+    MainFrame.Position = UDim2.new(0.5, -200, 0.5, -150)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 48)
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Parent = ScreenGui
+
+    local TitleBar = Instance.new("Frame")
+    TitleBar.Size = UDim2.new(1, 0, 0, 30)
+    TitleBar.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
+    TitleBar.BorderSizePixel = 0
+    TitleBar.Parent = MainFrame
+
+    local TitleLabel = Instance.new("TextLabel")
+    TitleLabel.Size = UDim2.new(1, -90, 1, 0)
+    TitleLabel.Position = UDim2.new(0, 10, 0, 0)
+    TitleLabel.BackgroundTransparency = 1
+    TitleLabel.Text = "Silent Aim Console"
+    TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    TitleLabel.TextSize = 14
+    TitleLabel.Font = Enum.Font.GothamBold
+    TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    TitleLabel.Parent = TitleBar
+
+    local ButtonSize = UDim2.new(0, 45, 0, 30)
+    local MaximizeButton = Instance.new("TextButton")
+    MaximizeButton.Size = ButtonSize
+    MaximizeButton.Position = UDim2.new(1, -90, 0, 0)
+    MaximizeButton.BackgroundTransparency = 1
+    MaximizeButton.Text = ""
+    MaximizeButton.Parent = TitleBar
+
+    local MaximizeIcon = Instance.new("ImageLabel")
+    MaximizeIcon.Size = UDim2.new(0, 20, 0, 20)
+    MaximizeIcon.Position = UDim2.new(0.5, -10, 0.5, -10)
+    MaximizeIcon.BackgroundTransparency = 1
+    MaximizeIcon.Image = "rbxassetid://81207376475342"
+    MaximizeIcon.Parent = MaximizeButton
+
+    local CloseButton = Instance.new("TextButton")
+    CloseButton.Size = ButtonSize
+    CloseButton.Position = UDim2.new(1, -45, 0, 0)
+    CloseButton.BackgroundTransparency = 1
+    CloseButton.Text = ""
+    CloseButton.Parent = TitleBar
+
+    local CloseIcon = Instance.new("ImageLabel")
+    CloseIcon.Size = UDim2.new(0, 20, 0, 20)
+    CloseIcon.Position = UDim2.new(0.5, -10, 0.5, -10)
+    CloseIcon.BackgroundTransparency = 1
+    CloseIcon.Image = "rbxassetid://100234668796385"
+    CloseIcon.Parent = CloseButton
+
+    local LogFrame = Instance.new("ScrollingFrame")
+    LogFrame.Size = UDim2.new(1, -10, 1, -55)
+    LogFrame.Position = UDim2.new(0, 5, 0, 35)
+    LogFrame.BackgroundTransparency = 1
+    LogFrame.ScrollBarThickness = 4
+    LogFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+    LogFrame.Parent = MainFrame
+
+    local UIListLayout = Instance.new("UIListLayout")
+    UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    UIListLayout.Parent = LogFrame
+
+    local Footer = Instance.new("Frame")
+    Footer.Size = UDim2.new(1, 0, 0, 20)
+    Footer.Position = UDim2.new(0, 0, 1, -20)
+    Footer.BackgroundColor3 = Color3.fromRGB(90, 90, 97)
+    Footer.BorderSizePixel = 0
+    Footer.Parent = MainFrame
+
+    local FooterLabel = Instance.new("TextLabel")
+    FooterLabel.Size = UDim2.new(1, 0, 1, 0)
+    FooterLabel.BackgroundTransparency = 1
+    FooterLabel.Text = "cursed by 32vision"
+    FooterLabel.TextColor3 = Color3.fromRGB(220, 220, 220) -- Исправлено: Color PurgatoryRGB на Color3.fromRGB
+    FooterLabel.TextSize = 14
+    FooterLabel.Font = Enum.Font.Gotham
+    FooterLabel.Parent = Footer
+
+    local function addLog(text)
+        local LogLabel = Instance.new("TextLabel")
+        LogLabel.Size = UDim2.new(1, 0, 0, 20)
+        LogLabel.BackgroundTransparency = 1
+        LogLabel.RichText = true
+        LogLabel.Text = text
+        LogLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+        LogLabel.TextSize = 14
+        LogLabel.Font = Enum.Font.GothamBold
+        LogLabel.TextXAlignment = Enum.TextXAlignment.Left
+        LogLabel.TextWrapped = true
+        LogLabel.Parent = LogFrame
+
+        local function updateLabelSize()
+            local textBounds = TextService:GetTextSize(
+                LogLabel.Text,
+                LogLabel.TextSize,
+                LogLabel.Font,
+                Vector2.new(LogFrame.AbsoluteSize.X - 10, math.huge)
+            )
+            local lines = math.ceil(textBounds.X / (LogFrame.AbsoluteSize.X - 10))
+            LogLabel.Size = UDim2.new(1, 0, 0, math.max(20, lines * 20))
+        end
+
+        updateLabelSize()
+        LogFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+        LogFrame.CanvasPosition = Vector2.new(0, UIListLayout.AbsoluteContentSize.Y)
+    end
+
+    local isDragging = false
+    local dragStart = nil
+    local startPos = nil
+    TitleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = true
+            dragStart = input.Position
+            startPos = MainFrame.Position
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement and isDragging then
+            local delta = input.Position - dragStart
+            MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isDragging = false
+        end
+    end)
+
+    local isResizing = false
+    local resizeStart = nil
+    local startSize = nil
+    local ResizeButton = Instance.new("TextButton")
+    ResizeButton.Size = UDim2.new(0, 20, 0, 20)
+    ResizeButton.Position = UDim2.new(1, -20, 1, -20)
+    ResizeButton.BackgroundTransparency = 1
+    ResizeButton.Text = ""
+    ResizeButton.Parent = MainFrame
+
+    local ResizeIcon = Instance.new("ImageLabel")
+    ResizeIcon.Size = UDim2.new(0, 20, 0, 20)
+    ResizeIcon.Position = UDim2.new(1, -20, 1, -20)
+    ResizeIcon.BackgroundTransparency = 1
+    ResizeIcon.Image = "rbxassetid://6014261993"
+    ResizeIcon.ImageColor3 = Color3.fromRGB(200, 200, 200)
+    ResizeIcon.Parent = MainFrame
+
+    local function updateAllLabels()
+        for _, label in pairs(LogFrame:GetChildren()) do
+            if label:IsA("TextLabel") then
+                local textBounds = TextService:GetTextSize(
+                    label.Text,
+                    label.TextSize,
+                    label.Font,
+                    Vector2.new(LogFrame.AbsoluteSize.X - 10, math.huge)
+                )
+                local lines = math.ceil(textBounds.X / (LogFrame.AbsoluteSize.X - 10))
+                label.Size = UDim2.new(1, 0, 0, math.max(20, lines * 20))
+            end
+        end
+        LogFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
+    end
+
+    ResizeButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isResizing = true
+            resizeStart = input.Position
+            startSize = MainFrame.Size
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement and isResizing then
+            local delta = input.Position - resizeStart
+            local newWidth = math.max(200, startSize.X.Offset + delta.X)
+            local newHeight = math.max(150, startSize.Y.Offset + delta.Y)
+            MainFrame.Size = UDim2.new(0, newWidth, 0, newHeight)
+            updateAllLabels()
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isResizing = false
+        end
+    end)
+
+    local isMaximized = false
+    local originalSize = MainFrame.Size
+    local originalPos = MainFrame.Position
+    MaximizeButton.MouseButton1Click:Connect(function()
+        if isMaximized then
+            MainFrame.Size = originalSize
+            MainFrame.Position = originalPos
+            MaximizeIcon.Image = "rbxassetid://81207376475342"
+            isMaximized = false
+        else
+            originalSize = MainFrame.Size
+            originalPos = MainFrame.Position
+            MainFrame.Size = UDim2.new(1, 0, 1, 0)
+            MainFrame.Position = UDim2.new(0, 0, 0, 0)
+            MaximizeIcon.Image = "rbxassetid://84930406585654"
+            isMaximized = true
+        end
+        updateAllLabels()
+    end)
+
+    CloseButton.MouseButton1Click:Connect(function()
+        MainFrame.Visible = false
+        if Toggles.SilentAimShowConsole then
+            Toggles.SilentAimShowConsole:SetValue(false)
+        end
+    end)
+
+    local function applyHoverEffect(button, hoverColor)
+        button.MouseEnter:Connect(function()
+            button.BackgroundColor3 = hoverColor
+            button.BackgroundTransparency = 0
+        end)
+        button.MouseLeave:Connect(function()
+            button.BackgroundTransparency = 1
+        end)
+    end
+
+    applyHoverEffect(MaximizeButton, Color3.fromRGB(0, 100, 195))
+    applyHoverEffect(CloseButton, Color3.fromRGB(232, 17, 35))
+
+    return {
+        addLog = addLog,
+        setVisible = function(visible)
+            MainFrame.Visible = visible
+        end,
+        destroy = function()
+            ScreenGui:Destroy()
+        end
+    }
+end
+
+-- Silent Aim логика
+local target = nil
+local character = LocalPlayer.Character
+local healthConnection = nil
+local armorConnection = nil
+local lastHealth = nil
+local lastArmor = nil
+local jumpTime = 0
+local targetState = "Ground"
+local targetStatsGui = nil
+local console = nil
+local tracerBeam = nil
+local tracerStart = nil
+local tracerEnd = nil
+local tracerParticles = nil
+local lastPosition = nil
+local lastTime = nil
+local healthLogConnection = nil
+local armorLogConnection = nil
+local lastTargetHealth = nil
+local lastTargetArmor = nil
+
+local function createTracer()
+    if tracerBeam then
+        tracerBeam:Destroy()
+        tracerStart:Destroy()
+        tracerEnd:Destroy()
+        tracerParticles:Destroy()
+    end
+    tracerStart = Instance.new("Attachment")
+    tracerEnd = Instance.new("Attachment")
+    tracerStart.Name = "TracerStart"
+    tracerEnd.Name = "TracerEnd"
+    tracerBeam = Instance.new("Beam")
+    tracerBeam.Name = "AimTracer"
+    tracerBeam.Attachment0 = tracerStart
+    tracerBeam.Attachment1 = tracerEnd
+    tracerBeam.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Settings.Tracer.Color),
+        ColorSequenceKeypoint.new(1, Settings.Tracer.FadeColor)
+    })
+    tracerBeam.LightEmission = Settings.Tracer.LightEmission
+    tracerBeam.LightInfluence = Settings.Tracer.LightInfluence
+    tracerBeam.Width0 = Settings.Tracer.Width0
+    tracerBeam.Width1 = Settings.Tracer.Width1
+    tracerBeam.Texture = Settings.Tracer.Texture
+    tracerBeam.TextureSpeed = Settings.Tracer.TextureSpeed
+    tracerBeam.Enabled = false
+    tracerBeam.Parent = Workspace.Terrain
+    tracerParticles = Instance.new("ParticleEmitter")
+    tracerParticles.Color = ColorSequence.new(Settings.Particles.Color)
+    tracerParticles.Size = Settings.Particles.Size
+    tracerParticles.Lifetime = Settings.Particles.Lifetime
+    tracerParticles.Rate = Settings.Particles.Rate
+    tracerParticles.Speed = Settings.Particles.Speed
+    tracerParticles.SpreadAngle = Settings.Particles.SpreadAngle
+    tracerParticles.Enabled = false
+    tracerParticles.Parent = tracerEnd
+end
+
+local function getTargetInfo(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return nil end
+    local humanoid = targetPlayer.Character:FindFirstChild("Humanoid")
+    local rootPart = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not rootPart then return nil end
+    local armor = 0
+    local armorInstance = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild(targetPlayer.Name) and
+                         Workspace.Players[targetPlayer.Name]:FindFirstChild("BodyEffects") and
+                         Workspace.Players[targetPlayer.Name].BodyEffects:FindFirstChild("Armor")
+    if armorInstance then armor = armorInstance.Value end
+    return {
+        Name = targetPlayer.Name,
+        Health = humanoid.Health,
+        MaxHealth = humanoid.MaxHealth,
+        Armor = armor,
+        Position = rootPart.Position,
+        Distance = (rootPart.Position - (character and character.HumanoidRootPart and character.HumanoidRootPart.Position or Vector3.new())).Magnitude,
+        Status = targetState
+    }
+end
+
+local function printTargetInfo(info)
+    if info then
+        print(string.format(
+            "Target: %s | Health: %.1f/%.1f | Armor: %.1f | Distance: %.2f studs | Position: (%.2f, %.2f, %.2f) | Status: %s",
+            info.Name, info.Health, info.MaxHealth, info.Armor, info.Distance, info.Position.X, info.Position.Y, info.Position.Z, info.Status
+        ))
+    else
+        print("No target information available")
+    end
+end
+
+local function findClosestTarget()
+    local closestTarget, minDistance = nil, math.huge
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local humanoid = player.Character:FindFirstChild("Humanoid")
+            local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
+            if humanoid and rootPart and humanoid.Health > 0 then
+                local screenPos, onScreen = Camera:WorldToScreenPoint(rootPart.Position)
+                if onScreen then
+                    local distance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+                    if distance < minDistance then
+                        minDistance = distance
+                        closestTarget = player
+                    end
+                end
+            end
+        end
+    end
+    return closestTarget
+end
+
+local function updateTargetState(delta)
+    if target and target.Character and target.Character:FindFirstChild("Humanoid") then
+        local humanoid = target.Character.Humanoid
+        local isJumping = humanoid.FloorMaterial == Enum.Material.Air
+        if isJumping then
+            jumpTime = jumpTime + delta
+            targetState = jumpTime > 0 and "Jumped" or "Fly"
+        else
+            jumpTime = 0
+            targetState = "Ground"
+        end
+    else
+        jumpTime = 0
+        targetState = "Ground"
+    end
+end
+
+local function predictPosition(rootPart, humanoid)
+    if not rootPart or not humanoid then return rootPart and rootPart.Position or Vector3.new() end
+    local position = rootPart.Position
+    local velocity = rootPart.Velocity
+    if targetState == "Jumped" then
+        local offsetPos = position + Vector3.new(0, Settings.JumpOffset.Height, 0)
+        if Settings.PredictionMode == "Velocity" then
+            return offsetPos + velocity * Settings.PredictionFactor
+        end
+        return offsetPos
+    end
+    if Settings.PredictionMode == "Velocity" then
+        return position + Vector3.new(
+            velocity.X * Settings.PredictionFactor,
+            velocity.Y * Settings.PredictionFactor,
+            velocity.Z * Settings.PredictionFactor
+        )
+    elseif Settings.PredictionMode == "MoveDirection" then
+        if humanoid.MoveDirection ~= Vector3.new() then
+            return position + (humanoid.MoveDirection.Unit * (Settings.PredictionFactor * 10))
+        end
+        return position
+    elseif Settings.PredictionMode == "CalculateCFrame" then
+        local currentTime = tick()
+        local deltaTime = currentTime - (lastTime or currentTime)
+        if not lastPosition or (position - lastPosition).Magnitude < 0.001 then
+            lastPosition = position
+            lastTime = currentTime
+            return position
+        end
+        local distance = (position - lastPosition).Magnitude
+        local speed = (distance / deltaTime) * (0.1 * (Settings.PredictionFactor * 10))
+        local predictedPos = position + (position - lastPosition).Unit * speed
+        local yVelocity = (position.Y - lastPosition.Y) / deltaTime * (0.1 * Settings.PredictionFactor)
+        predictedPos = predictedPos + Vector3.new(0, yVelocity, 0)
+        lastTime = currentTime
+        lastPosition = position
+        return predictedPos
+    end
+    return position
+end
+
+local function createTargetStatsGui()
+    local gui = {
+        ScreenGui = nil,
+        MainFrame = nil,
+        HealthBar = nil,
+        ArmorBar = nil,
+        NameLabel = nil,
+        AvatarImage = nil,
+        PositionLabel = nil,
+        HealthText = nil,
+        ArmorText = nil,
+        DamageParticles = nil,
+        IsDragging = false,
+        LastMousePos = nil,
+        Tweens = {},
+        Connections = {},
+        LastHealth = nil,
+        LastArmor = nil,
+        HealthConnection = nil,
+        ArmorConnection = nil
+    }
+    gui.ScreenGui = Instance.new("ScreenGui")
+    gui.ScreenGui.Name = "TargetStatsGui"
+    gui.ScreenGui.ResetOnSpawn = false
+    gui.ScreenGui.IgnoreGuiInset = true
+    gui.ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    gui.MainFrame = Instance.new("Frame")
+    gui.MainFrame.Size = Settings.TargetStats.FrameSize
+    gui.MainFrame.Position = UDim2.new(0.5, -150, 0.5, -60)
+    gui.MainFrame.BackgroundColor3 = Settings.TargetStats.BackgroundColor
+    gui.MainFrame.BackgroundTransparency = Settings.TargetStats.BackgroundTransparency
+    gui.MainFrame.BorderSizePixel = 0
+    gui.MainFrame.Visible = false
+    gui.MainFrame.Parent = gui.ScreenGui
+    
+    local UICorner = Instance.new("UICorner")
+    UICorner.CornerRadius = UDim.new(0, 8)
+    UICorner.Parent = gui.MainFrame
+    
+    local BorderFrame = Instance.new("Frame")
+    BorderFrame.Size = UDim2.new(1, 6, 1, 6)
+    BorderFrame.Position = UDim2.new(0, -3, 0, -3)
+    BorderFrame.BackgroundTransparency = 0
+    BorderFrame.BorderSizePixel = 0
+    BorderFrame.Parent = gui.MainFrame
+    
+    local UIGradient = Instance.new("UIGradient")
+    UIGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Settings.TargetStats.GradientColors.Start),
+        ColorSequenceKeypoint.new(1, Settings.TargetStats.GradientColors.End)
+    })
+    UIGradient.Rotation = 45
+    UIGradient.Parent = BorderFrame
+    
+    local InnerFrame = Instance.new("Frame")
+    InnerFrame.Size = UDim2.new(1, -6, 1, -6)
+    InnerFrame.Position = UDim2.new(0, 3, 0, 3)
+    InnerFrame.BackgroundColor3 = Settings.TargetStats.BackgroundColor
+    InnerFrame.BackgroundTransparency = Settings.TargetStats.BackgroundTransparency
+    InnerFrame.BorderSizePixel = 0
+    InnerFrame.Parent = BorderFrame
+    
+    local InnerCorner = Instance.new("UICorner")
+    InnerCorner.CornerRadius = UDim.new(0, 8)
+    InnerCorner.Parent = InnerFrame
+    
+    gui.AvatarImage = Instance.new("ImageLabel")
+    gui.AvatarImage.Size = Settings.TargetStats.Avatar.Size
+    gui.AvatarImage.Position = Settings.TargetStats.Avatar.Position
+    gui.AvatarImage.BackgroundTransparency = 1
+    gui.AvatarImage.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+    gui.AvatarImage.ScaleType = Enum.ScaleType.Fit
+    gui.AvatarImage.Parent = gui.MainFrame
+    
+    local AvatarCorner = Instance.new("UICorner")
+    AvatarCorner.CornerRadius = UDim.new(0, 8)
+    AvatarCorner.Parent = gui.AvatarImage
+    
+    local HealthFrame = Instance.new("Frame")
+    HealthFrame.Size = Settings.TargetStats.HealthBar.Size
+    HealthFrame.Position = Settings.TargetStats.HealthBar.Position
+    HealthFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    HealthFrame.BorderSizePixel = 0
+    HealthFrame.Parent = gui.MainFrame
+    
+    gui.HealthBar = Instance.new("Frame")
+    gui.HealthBar.Size = UDim2.new(1, 0, 1, 0)
+    gui.HealthBar.BackgroundTransparency = 0
+    gui.HealthBar.BorderSizePixel = 0
+    gui.HealthBar.Parent = HealthFrame
+    
+    local HealthCorner = Instance.new("UICorner")
+    HealthCorner.CornerRadius = UDim.new(0, 4)
+    HealthCorner.Parent = HealthFrame
+    
+    local HealthGradient = Instance.new("UIGradient")
+    HealthGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Settings.TargetStats.HealthBar.DarkColor),
+        ColorSequenceKeypoint.new(1, Settings.TargetStats.HealthBar.LightColor)
+    })
+    HealthGradient.Rotation = 45
+    HealthGradient.Parent = gui.HealthBar
+    
+    gui.HealthText = Instance.new("TextLabel")
+    gui.HealthText.Size = UDim2.new(1, 0, 1, 0)
+    gui.HealthText.Position = UDim2.new(0, 0, 0, 0)
+    gui.HealthText.BackgroundTransparency = 1
+    gui.HealthText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    gui.HealthText.TextScaled = true
+    gui.HealthText.Font = Enum.Font.GothamBlack
+    gui.HealthText.Text = "100"
+    gui.HealthText.TextStrokeTransparency = 0.5
+    gui.HealthText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    gui.HealthText.Parent = HealthFrame
+    
+    local ArmorFrame = Instance.new("Frame")
+    ArmorFrame.Size = Settings.TargetStats.ArmorBar.Size
+    ArmorFrame.Position = Settings.TargetStats.ArmorBar.Position
+    ArmorFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    ArmorFrame.BorderSizePixel = 0
+    ArmorFrame.Parent = gui.MainFrame
+    
+    gui.ArmorBar = Instance.new("Frame")
+    gui.ArmorBar.Size = UDim2.new(1, 0, 1, 0)
+    gui.ArmorBar.BackgroundTransparency = 0
+    gui.ArmorBar.BorderSizePixel = 0
+    gui.ArmorBar.Parent = ArmorFrame
+    
+    local ArmorCorner = Instance.new("UICorner")
+    ArmorCorner.CornerRadius = UDim.new(0, 4)
+    ArmorCorner.Parent = ArmorFrame
+    
+    local ArmorGradient = Instance.new("UIGradient")
+    ArmorGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Settings.TargetStats.ArmorBar.DarkColor),
+        ColorSequenceKeypoint.new(1, Settings.TargetStats.ArmorBar.LightColor)
+    })
+    ArmorGradient.Rotation = 45
+    ArmorGradient.Parent = gui.ArmorBar
+    
+    gui.ArmorText = Instance.new("TextLabel")
+    gui.ArmorText.Size = UDim2.new(1, 0, 1, 0)
+    gui.ArmorText.Position = UDim2.new(0, 0, 0, 0)
+    gui.ArmorText.BackgroundTransparency = 1
+    gui.ArmorText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    gui.ArmorText.TextScaled = true
+    gui.ArmorText.Font = Enum.Font.GothamBlack
+    gui.ArmorText.Text = "100"
+    gui.ArmorText.TextStrokeTransparency = 0.5
+    gui.ArmorText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    gui.ArmorText.Parent = ArmorFrame
+    
+    gui.NameLabel = Instance.new("TextLabel")
+    gui.NameLabel.Size = UDim2.new(0.65, 0, 0.2, 0)
+    gui.NameLabel.Position = UDim2.new(0.3, 5, 0.1, 0)
+    gui.NameLabel.BackgroundTransparency = 1
+    gui.NameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    gui.NameLabel.TextScaled = true
+    gui.NameLabel.TextSize = 20
+    gui.NameLabel.Font = Enum.Font.GothamBlack
+    gui.NameLabel.Text = "No Target"
+    gui.NameLabel.TextStrokeTransparency = 0.5
+    gui.NameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    gui.NameLabel.Parent = gui.MainFrame
+    
+    gui.PositionLabel = Instance.new("TextLabel")
+    gui.PositionLabel.Size = Settings.TargetStats.PositionLabel.Size
+    gui.PositionLabel.Position = Settings.TargetStats.PositionLabel.Position
+    gui.PositionLabel.BackgroundTransparency = 1
+    gui.PositionLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    gui.PositionLabel.TextScaled = true
+    gui.PositionLabel.Font = Enum.Font.GothamBlack
+    gui.PositionLabel.Text = "Position: 0, 0, 0"
+    gui.PositionLabel.TextStrokeTransparency = 0.5
+    gui.PositionLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    gui.PositionLabel.Parent = gui.MainFrame
+    
+    gui.DamageParticles = Instance.new("ParticleEmitter")
+    gui.DamageParticles.Color = ColorSequence.new(Settings.TargetStats.DamageParticles.Color)
+    gui.DamageParticles.Size = Settings.TargetStats.DamageParticles.Size
+    gui.DamageParticles.Lifetime = Settings.TargetStats.DamageParticles.Lifetime
+    gui.DamageParticles.Rate = Settings.TargetStats.DamageParticles.Rate
+    gui.DamageParticles.Speed = Settings.TargetStats.DamageParticles.Speed
+    gui.DamageParticles.SpreadAngle = Settings.TargetStats.DamageParticles.SpreadAngle
+    gui.DamageParticles.Enabled = false
+    gui.DamageParticles.Parent = gui.MainFrame
+    
+    local function dragFrame(input)
+        if gui.IsDragging and gui.MainFrame then
+            local currentPos = input.Position
+            local delta = currentPos - gui.LastMousePos
+            local newPos = gui.MainFrame.Position + UDim2.new(0, delta.X, 0, delta.Y)
+            local screenRes = GuiService:GetScreenResolution()
+            newPos = UDim2.new(
+                math.clamp(newPos.X.Scale, 0, 1 - gui.MainFrame.Size.X.Scale),
+                newPos.X.Offset,
+                math.clamp(newPos.Y.Scale, 0, 1 - gui.MainFrame.Size.Y.Scale),
+                newPos.Y.Offset
+            )
+            local tweenInfo = TweenInfo.new(
+                Settings.TargetStats.Drag.Smoothness,
+                Settings.TargetStats.Animation.EasingStyle,
+                Settings.TargetStats.Animation.EasingDirection
+            )
+            local tween = TweenService:Create(gui.MainFrame, tweenInfo, {Position = newPos})
+            tween:Play()
+            gui.Tweens["Drag"] = tween
+            gui.LastMousePos = currentPos
+        end
+    end
+    
+    gui.Connections[#gui.Connections + 1] = gui.MainFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            gui.IsDragging = true
+            gui.LastMousePos = input.Position
+        end
+    end)
+    
+    gui.Connections[#gui.Connections + 1] = gui.MainFrame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            gui.IsDragging = false
+        end
+    end)
+    
+    gui.Connections[#gui.Connections + 1] = UserInputService.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragFrame(input)
+        end
+    end)
+    
+    function gui:Update(targetPlayer, delta)
+    if not self.MainFrame then return end
+    if targetPlayer and targetPlayer.Character and targetPlayer.Character:FindFirstChild("Humanoid") then
+        self.MainFrame.Visible = Settings.TargetStats.Enabled
+        local humanoid = targetPlayer.Character.Humanoid
+        local healthRatio = humanoid.Health / humanoid.MaxHealth
+        local armorRatio = 0
+        local armorInstance = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild(targetPlayer.Name) and
+                             Workspace.Players[targetPlayer.Name]:FindFirstChild("BodyEffects") and
+                             Workspace.Players[targetPlayer.Name].BodyEffects:FindFirstChild("Armor")
+        if armorInstance then armorRatio = armorInstance.Value / 100 end
+        local tweenInfo = TweenInfo.new(
+            Settings.TargetStats.Animation.TweenTime,
+            Settings.TargetStats.Animation.EasingStyle,
+            Settings.TargetStats.Animation.EasingDirection
+        )
+        if self.HealthBar then
+            if self.Tweens["Health"] then
+                self.Tweens["Health"]:Cancel()
+            end
+            local healthTween = TweenService:Create(self.HealthBar, tweenInfo, {Size = UDim2.new(math.clamp(healthRatio, 0, 1), 0, 1, 0)})
+            healthTween:Play()
+            self.Tweens["Health"] = healthTween
+        end
+        if self.ArmorBar then
+            if self.Tweens["Armor"] then
+                self.Tweens["Armor"]:Cancel()
+            end
+            local armorTween = TweenService:Create(self.ArmorBar, tweenInfo, {Size = UDim2.new(math.clamp(armorRatio, 0, 1), 0, 1, 0)})
+            armorTween:Play()
+            self.Tweens["Armor"] = armorTween
+        end
+        self.HealthText.Text = tostring(math.floor(humanoid.Health))
+        self.ArmorText.Text = tostring(math.floor(armorInstance and armorInstance.Value or 0))
+        self.NameLabel.Text = targetPlayer.Name
+        local rootPart = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            local pos = rootPart.Position
+            self.PositionLabel.Text = string.format("Position: %.1f, %.1f, %.1f", pos.X, pos.Y, pos.Z)
+        end
+        local userId = targetPlayer.UserId
+        self.AvatarImage.Image = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=150&height=150&format=png", userId)
+    else
+        self.MainFrame.Visible = false
+        self.NameLabel.Text = "No Target"
+        self.AvatarImage.Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"
+        self.PositionLabel.Text = "Position: 0, 0, 0"
+        self.HealthText.Text = "0"
+        self.ArmorText.Text = "0"
+        self.LastHealth = nil
+        self.LastArmor = nil
+        if self.HealthConnection then
+            self.HealthConnection:Disconnect()
+            self.HealthConnection = nil
+        end
+        if self.ArmorConnection then
+            self.ArmorConnection:Disconnect()
+            self.ArmorConnection = nil
+        end
+    end
+end
+    
+    function gui:Destroy()
+        for _, tween in pairs(self.Tweens) do
+            if tween then tween:Cancel() end
+        end
+        for _, connection in pairs(self.Connections) do
+            connection:Disconnect()
+        end
+        if self.HealthConnection then
+            self.HealthConnection:Disconnect()
+            self.HealthConnection = nil
+        end
+        if self.ArmorConnection then
+            self.ArmorConnection:Disconnect()
+            self.ArmorConnection = nil
+        end
+        if self.ScreenGui then
+            self.ScreenGui:Destroy()
+        end
+        self.MainFrame = nil
+        self.HealthBar = nil
+        self.ArmorBar = nil
+        self.NameLabel = nil
+        self.AvatarImage = nil
+        self.PositionLabel = nil
+        self.HealthText = nil
+        self.ArmorText = nil
+        self.DamageParticles = nil
+        self.Tweens = {}
+        self.Connections = {}
+    end
+    
+    return gui
+end
+
+local function updateSilentAim(delta)
+    updateTargetState(delta)
+    if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and character and character:FindFirstChild("HumanoidRootPart") then
+        local localRoot = character.HumanoidRootPart
+        local targetRoot = target.Character.HumanoidRootPart
+        local predictedPos = predictPosition(targetRoot, target.Character.Humanoid)
+        tracerStart.Parent = localRoot
+        tracerStart.WorldPosition = localRoot.Position
+        tracerEnd.Parent = Workspace.Terrain
+        tracerEnd.WorldPosition = predictedPos
+        tracerBeam.Enabled = Settings.Tracer.Enabled
+        tracerParticles.Enabled = Settings.Tracer.Enabled
+        tracerBeam.Brightness = 1 + Settings.Tracer.BrightnessPulse * math.sin(tick() * 5)
+    else
+        tracerBeam.Enabled = false
+        tracerParticles.Enabled = false
+    end
+    if targetStatsGui then
+        targetStatsGui:Update(target, delta)
+    end
+end
+
+local function setupTargetLogging(targetPlayer)
+    if healthLogConnection then
+        healthLogConnection:Disconnect()
+        healthLogConnection = nil
+    end
+    if armorLogConnection then
+        armorLogConnection:Disconnect()
+        armorLogConnection = nil
+    end
+    lastTargetHealth = nil
+    lastTargetArmor = nil
+    if not targetPlayer or not targetPlayer.Character then return end
+    local humanoid = targetPlayer.Character:FindFirstChild("Humanoid")
+    if humanoid and Settings.ConsoleLogger.LogTypes.Hitlog then
+        lastTargetHealth = humanoid.Health
+        healthLogConnection = humanoid.HealthChanged:Connect(function(newHealth)
+            if lastTargetHealth and newHealth < lastTargetHealth then
+                local time = os.date("%H:%M:%S")
+                local armor = 0
+                local armorInstance = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild(targetPlayer.Name) and
+                                     Workspace.Players[targetPlayer.Name]:FindFirstChild("BodyEffects") and
+                                     Workspace.Players[targetPlayer.Name].BodyEffects:FindFirstChild("Armor")
+                if armorInstance then armor = armorInstance.Value end
+                console.addLog(string.format(
+                    'Hitlog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>, Armor: <font color="rgb(0,0,255)">%.1f</font>',
+                    targetPlayer.Name, time, newHealth, armor
+                ))
+            end
+            lastTargetHealth = newHealth
+        end)
+    end
+    local armorInstance = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild(targetPlayer.Name) and
+                         Workspace.Players[targetPlayer.Name]:FindFirstChild("BodyEffects") and
+                         Workspace.Players[targetPlayer.Name].BodyEffects:FindFirstChild("Armor")
+    if armorInstance and Settings.ConsoleLogger.LogTypes.Hitlog then
+        lastTargetArmor = armorInstance.Value
+        armorLogConnection = armorInstance:GetPropertyChangedSignal("Value"):Connect(function()
+            local newArmor = armorInstance.Value
+            if lastTargetHealth and lastTargetArmor and newArmor < lastTargetArmor then
+                local time = os.date("%H:%M:%S")
+                console.addLog(string.format(
+                    'Hitlog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>, Armor: <font color="rgb(0,0,255)">%.1f</font>',
+                    targetPlayer.Name, time, lastTargetHealth, newArmor
+                ))
+            end
+            lastTargetArmor = newArmor
+        end)
+    end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed or not Settings.Enabled then return end
+    if input.KeyCode == Settings.Keybind then
+        if target == nil then
+            target = findClosestTarget()
+            if target then
+                Library:Notify({
+                    Title = "Silent Aim",
+                    Description = "Locked on to: " .. target.Name,
+                    Time = 2
+                })
+                local info = getTargetInfo(target)
+                printTargetInfo(info)
+                tracerBeam.Enabled = Settings.Tracer.Enabled
+                tracerParticles.Enabled = Settings.Tracer.Enabled
+                setupTargetLogging(target)
+                if Settings.ConsoleLogger.LogTypes.TargetHookedLog then
+                    local time = os.date("%H:%M:%S")
+                    local distance = info and string.format("%.2f", info.Distance) or "N/A"
+                    console.addLog(string.format(
+                        'TargetHookedLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Distance: %s',
+                        target.Name, time, distance
+                    ))
+                end
+            else
+                Library:Notify({
+                    Title = "Silent Aim",
+                    Description = "No target found",
+                    Time = 2
+                })
+                tracerBeam.Enabled = false
+                tracerParticles.Enabled = false
+            end
+        else
+            Library:Notify({
+                Title = "Silent Aim",
+                Description = "Unlocked from: " .. target.Name,
+                Time = 2
+            })
+            if Settings.ConsoleLogger.LogTypes.TargetHookedLog then
+                local time = os.date("%H:%M:%S")
+                console.addLog(string.format(
+                    'TargetHookedLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Status: Unhooked',
+                    target.Name, time
+                ))
+            end
+            if healthLogConnection then
+                healthLogConnection:Disconnect()
+                healthLogConnection = nil
+            end
+            if armorLogConnection then
+                armorLogConnection:Disconnect()
+                armorLogConnection = nil
+            end
+            lastTargetHealth = nil
+            lastTargetArmor = nil
+            target = nil
+            tracerBeam.Enabled = false
+            tracerParticles.Enabled = false
+            jumpTime = 0
+            targetState = "Ground"
+        end
+    end
+end)
+
+local function setupCharacter(newCharacter)
+    character = newCharacter
+    local humanoid = newCharacter:FindFirstChild("Humanoid")
+    if humanoid then
+        lastHealth = humanoid.Health
+        if Settings.ConsoleLogger.LogTypes.LocalPlayerDamageLog then
+            humanoid.HealthChanged:Connect(function(newHealth)
+                if lastHealth and newHealth < lastHealth then
+                    local time = os.date("%H:%M:%S")
+                    console.addLog(string.format(
+                        'LocalPlayerDamageLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, HP: <font color="rgb(255,0,0)">%.1f</font>',
+                        LocalPlayer.Name, time, newHealth
+                    ))
+                end
+                lastHealth = newHealth
+            end)
+        end
+    end
+    local armorInstance = Workspace:FindFirstChild("Players") and Workspace.Players:FindFirstChild(LocalPlayer.Name) and
+                         Workspace.Players[LocalPlayer.Name]:FindFirstChild("BodyEffects") and
+                         Workspace.Players[LocalPlayer.Name].BodyEffects:FindFirstChild("Armor")
+    if armorInstance then
+        lastArmor = armorInstance.Value
+        if Settings.ConsoleLogger.LogTypes.LocalPlayerArmorLog then
+            armorInstance:GetPropertyChangedSignal("Value"):Connect(function()
+                local newArmor = armorInstance.Value
+                if lastArmor and newArmor < lastArmor then
+                    local time = os.date("%H:%M:%S")
+                    console.addLog(string.format(
+                        'LocalPlayerArmorLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Armor: <font color="rgb(0,0,255)">%.1f</font>',
+                        LocalPlayer.Name, time, newArmor
+                    ))
+                end
+                lastArmor = newArmor
+            end)
+        end
+    end
+    newCharacter.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            child.Activated:Connect(function()
+                if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                    local targetRoot = target.Character.HumanoidRootPart
+                    local predictedPos = predictPosition(targetRoot, target.Character.Humanoid)
+                    ReplicatedStorage.MainEvent:FireServer("UpdateMousePos", predictedPos)
+                    local info = getTargetInfo(target)
+                    printTargetInfo(info)
+                end
+            end)
+        end
+    end)
+end
+
+-- Инициализация
+createTracer()
+targetStatsGui = createTargetStatsGui()
+console = createConsole()
+console.setVisible(Settings.ConsoleLogger.Enabled)
+if character then
+    setupCharacter(character)
+end
+LocalPlayer.CharacterAdded:Connect(setupCharacter)
+RunService.RenderStepped:Connect(updateSilentAim)
+
+-- Очистка при выходе игрока
+LocalPlayer.AncestryChanged:Connect(function()
+    if tracerBeam then
+        tracerBeam:Destroy()
+        tracerStart:Destroy()
+        tracerEnd:Destroy()
+        tracerParticles:Destroy()
+    end
+    if targetStatsGui then
+        targetStatsGui:Destroy()
+    end
+    if console then
+        console.destroy()
+    end
+    if healthLogConnection then
+        healthLogConnection:Disconnect()
+    end
+    if armorLogConnection then
+        armorLogConnection:Disconnect()
+    end
+end)
+
+-- UI для Silent Aim
+local SilentAimGroup = Tabs.Combat:AddRightGroupbox("Silent Aim Settings")
+
+-- Технические настройки
+SilentAimGroup:AddLabel("Technical Settings")
+
+local SilentAimToggle = SilentAimGroup:AddToggle("SilentAimEnabled", {
+    Text = "Enable Silent Aim",
+    Default = Settings.Enabled,
+    Tooltip = "Enable/Disable Silent Aim",
+    Callback = function(Value)
+        Settings.Enabled = Value
+        if not Value then
+            target = nil
+            tracerBeam.Enabled = false
+            tracerParticles.Enabled = false
+            targetStatsGui:Update(nil)
+        end
+    end
+})
+
+SilentAimToggle:AddKeyPicker("SilentAimKeybind", {
+    Default = Settings.Keybind.Name,
+    Mode = "Toggle",
+    Text = "Silent Aim Key",
+    NoUI = false,
+    Callback = function() end,
+    ChangedCallback = function(NewKey)
+        Settings.Keybind = NewKey
+    end
+})
+
+SilentAimGroup:AddDropdown("SilentAimPredictionMode", {
+    Values = {"Velocity", "MoveDirection", "CalculateCFrame"},
+    Default = Settings.PredictionMode,
+    Multi = false,
+    Text = "Prediction Mode",
+    Tooltip = "Select prediction method",
+    Callback = function(Value)
+        Settings.PredictionMode = Value
+    end
+})
+
+SilentAimGroup:AddInput("SilentAimPredictionFactor", {
+    Default = tostring(Settings.PredictionFactor),
+    Numeric = true,
+    Finished = true,
+    Text = "Prediction Factor",
+    Tooltip = "Set prediction factor",
+    Placeholder = "Enter factor...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            Settings.PredictionFactor = numValue
+            Library:Notify({
+                Title = "Silent Aim",
+                Description = "Prediction factor set to " .. numValue,
+                Time = 2
+            })
+        end
+    end
+})
+
+SilentAimGroup:AddInput("SilentAimJumpOffsetHeight", {
+    Default = tostring(Settings.JumpOffset.Height),
+    Numeric = true,
+    Finished = true,
+    Text = "Jump Offset Height",
+    Tooltip = "Set jump offset height",
+    Placeholder = "Enter height...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            Settings.JumpOffset.Height = numValue
+            Library:Notify({
+                Title = "Silent Aim",
+                Description = "Jump offset height set to " .. numValue,
+                Time = 2
+            })
+        end
+    end
+})
+
+-- Визуальные настройки
+SilentAimGroup:AddDivider()
+SilentAimGroup:AddLabel("Visual Settings")
+
+SilentAimGroup:AddToggle("SilentAimShowTracer", {
+    Text = "Show Tracer",
+    Default = Settings.Tracer.Enabled,
+    Tooltip = "Enable/Disable aim tracer",
+    Callback = function(Value)
+        Settings.Tracer.Enabled = Value
+        tracerBeam.Enabled = Value and target ~= nil
+        tracerParticles.Enabled = Value and target ~= nil
+    end
+})
+
+SilentAimGroup:AddLabel("Tracer Color"):AddColorPicker("SilentAimTracerColor", {
+    Default = Settings.Tracer.Color,
+    Title = "Tracer Color",
+    Callback = function(Value)
+        Settings.Tracer.Color = Value
+        tracerBeam.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Value),
+            ColorSequenceKeypoint.new(1, Settings.Tracer.FadeColor)
+        })
+    end
+})
+
+SilentAimGroup:AddLabel("Tracer Fade Color"):AddColorPicker("SilentAimTracerFadeColor", {
+    Default = Settings.Tracer.FadeColor,
+    Title = "Tracer Fade Color",
+    Callback = function(Value)
+        Settings.Tracer.FadeColor = Value
+        tracerBeam.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Settings.Tracer.Color),
+            ColorSequenceKeypoint.new(1, Value)
+        })
+    end
+})
+
+SilentAimGroup:AddInput("SilentAimTracerWidth0", {
+    Default = tostring(Settings.Tracer.Width0),
+    Numeric = true,
+    Finished = true,
+    Text = "Tracer Width Start",
+    Tooltip = "Set tracer start width",
+    Placeholder = "Enter width...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            Settings.Tracer.Width0 = numValue
+            tracerBeam.Width0 = numValue
+        end
+    end
+})
+
+SilentAimGroup:AddInput("SilentAimTracerWidth1", {
+    Default = tostring(Settings.Tracer.Width1),
+    Numeric = true,
+    Finished = true,
+    Text = "Tracer Width End",
+    Tooltip = "Set tracer end width",
+    Placeholder = "Enter width...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            Settings.Tracer.Width1 = numValue
+            tracerBeam.Width1 = numValue
+        end
+    end
+})
+
+SilentAimGroup:AddInput("SilentAimTracerTextureSpeed", {
+    Default = tostring(Settings.Tracer.TextureSpeed),
+    Numeric = true,
+    Finished = true,
+    Text = "Tracer Texture Speed",
+    Tooltip = "Set tracer texture speed",
+    Placeholder = "Enter speed...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            Settings.Tracer.TextureSpeed = numValue
+            tracerBeam.TextureSpeed = numValue
+        end
+    end
+})
+
+SilentAimGroup:AddInput("SilentAimTracerBrightnessPulse", {
+    Default = tostring(Settings.Tracer.BrightnessPulse),
+    Numeric = true,
+    Finished = true,
+    Text = "Tracer Brightness Pulse",
+    Tooltip = "Set tracer brightness pulse amplitude",
+    Placeholder = "Enter amplitude...",
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue then
+            Settings.Tracer.BrightnessPulse = numValue
+        end
+    end
+})
+
+SilentAimGroup:AddToggle("SilentAimShowTargetStats", {
+    Text = "Show Target Stats",
+    Default = Settings.TargetStats.Enabled,
+    Tooltip = "Show/Hide target stats GUI",
+    Callback = function(Value)
+        Settings.TargetStats.Enabled = Value
+        targetStatsGui:Update(target)
+    end
+})
+
+SilentAimGroup:AddLabel("Stats Background"):AddColorPicker("SilentAimTargetStatsBackgroundColor", {
+    Default = Settings.TargetStats.BackgroundColor,
+    Title = "Stats Background Color",
+    Transparency = Settings.TargetStats.BackgroundTransparency,
+    Callback = function(Value, Transparency)
+        Settings.TargetStats.BackgroundColor = Value
+        Settings.TargetStats.BackgroundTransparency = Transparency
+        if targetStatsGui.MainFrame then
+            targetStatsGui.MainFrame.BackgroundColor3 = Value
+            targetStatsGui.MainFrame.BackgroundTransparency = Transparency
+            targetStatsGui.MainFrame:FindFirstChildWhichIsA("Frame").BackgroundColor3 = Value
+            targetStatsGui.MainFrame:FindFirstChildWhichIsA("Frame").BackgroundTransparency = Transparency
+        end
+    end
+})
+
+SilentAimGroup:AddLabel("Health Bar Dark"):AddColorPicker("SilentAimHealthBarDarkColor", {
+    Default = Settings.TargetStats.HealthBar.DarkColor,
+    Title = "Health Bar Dark Color",
+    Callback = function(Value)
+        Settings.TargetStats.HealthBar.DarkColor = Value
+        if targetStatsGui.HealthBar then
+            targetStatsGui.HealthBar:FindFirstChildOfClass("UIGradient").Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Value),
+                ColorSequenceKeypoint.new(1, Settings.TargetStats.HealthBar.LightColor)
+            })
+        end
+    end
+})
+
+SilentAimGroup:AddLabel("Health Bar Light"):AddColorPicker("SilentAimHealthBarLightColor", {
+    Default = Settings.TargetStats.HealthBar.LightColor,
+    Title = "Health Bar Light Color",
+    Callback = function(Value)
+        Settings.TargetStats.HealthBar.LightColor = Value
+        if targetStatsGui.HealthBar then
+            targetStatsGui.HealthBar:FindFirstChildOfClass("UIGradient").Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Settings.TargetStats.HealthBar.DarkColor),
+                ColorSequenceKeypoint.new(1, Value)
+            })
+        end
+    end
+})
+
+SilentAimGroup:AddLabel("Armor Bar Dark"):AddColorPicker("SilentAimArmorBarDarkColor", {
+    Default = Settings.TargetStats.ArmorBar.DarkColor,
+    Title = "Armor Bar Dark Color",
+    Callback = function(Value)
+        Settings.TargetStats.ArmorBar.DarkColor = Value
+        if targetStatsGui.ArmorBar then
+            targetStatsGui.ArmorBar:FindFirstChildOfClass("UIGradient").Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Value),
+                ColorSequenceKeypoint.new(1, Settings.TargetStats.ArmorBar.LightColor)
+            })
+        end
+    end
+})
+
+SilentAimGroup:AddLabel("Armor Bar Light"):AddColorPicker("SilentAimArmorBarLightColor", {
+    Default = Settings.TargetStats.ArmorBar.LightColor,
+    Title = "Armor Bar Light Color",
+    Callback = function(Value)
+        Settings.TargetStats.ArmorBar.LightColor = Value
+        if targetStatsGui.ArmorBar then
+            targetStatsGui.ArmorBar:FindFirstChildOfClass("UIGradient").Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Settings.TargetStats.ArmorBar.DarkColor),
+                ColorSequenceKeypoint.new(1, Value)
+            })
+        end
+    end
+})
+
+SilentAimGroup:AddLabel("Damage Particles"):AddColorPicker("SilentAimDamageParticlesColor", {
+    Default = Settings.TargetStats.DamageParticles.Color,
+    Title = "Damage Particles Color",
+    Callback = function(Value)
+        Settings.TargetStats.DamageParticles.Color = Value
+        if targetStatsGui.DamageParticles then
+            targetStatsGui.DamageParticles.Color = ColorSequence.new(Value)
+        end
+    end
+})
+
+-- Настройки консоли
+SilentAimGroup:AddDivider()
+SilentAimGroup:AddLabel("Console Settings")
+
+SilentAimGroup:AddToggle("SilentAimShowConsole", {
+    Text = "Show Console",
+    Default = Settings.ConsoleLogger.Enabled,
+    Tooltip = "Show/Hide console logs",
+    Callback = function(Value)
+        Settings.ConsoleLogger.Enabled = Value
+        console.setVisible(Value)
+    end
+})
+
+SilentAimGroup:AddToggle("SilentAimLogHitlog", {
+    Text = "Log Hitlog",
+    Default = Settings.ConsoleLogger.LogTypes.Hitlog,
+    Tooltip = "Log hits on target",
+    Callback = function(Value)
+        Settings.ConsoleLogger.LogTypes.Hitlog = Value
+    end
+})
+
+SilentAimGroup:AddToggle("SilentAimLogLocalPlayerDamage", {
+    Text = "Log Local Player Damage",
+    Default = Settings.ConsoleLogger.LogTypes.LocalPlayerDamageLog,
+    Tooltip = "Log damage to local player",
+    Callback = function(Value)
+        Settings.ConsoleLogger.LogTypes.LocalPlayerDamageLog = Value
+    end
+})
+
+SilentAimGroup:AddToggle("SilentAimLogLocalPlayerArmor", {
+    Text = "Log Local Player Armor",
+    Default = Settings.ConsoleLogger.LogTypes.LocalPlayerArmorLog,
+    Tooltip = "Log armor changes for local player",
+    Callback = function(Value)
+        Settings.ConsoleLogger.LogTypes.LocalPlayerArmorLog = Value
+    end
+})
+
+SilentAimGroup:AddToggle("SilentAimLogTargetHooked", {
+    Text = "Log Target Hooked",
+    Default = Settings.ConsoleLogger.LogTypes.TargetHookedLog,
+    Tooltip = "Log target lock/unlock events",
+    Callback = function(Value)
+        Settings.ConsoleLogger.LogTypes.TargetHookedLog = Value
+    end
+})
 
 -- Setup ThemeManager and SaveManager
 ThemeManager:SetLibrary(Library)
