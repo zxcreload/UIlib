@@ -1,0 +1,227 @@
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+-- Конфигурация ESP
+local ESPConfig = {
+    Enabled = true, -- Включен ли ESP
+    TeamCheck = false, -- Проверять ли команду
+    BoxColor = Color3.fromRGB(255, 255, 255), -- Основной цвет боксов (белый)
+    BoxTransparency = 0.3, -- Прозрачность боксов
+    OutlineEnabled = true, -- Включен ли контур
+    OutlineColor = Color3.fromRGB(30, 30, 30), -- Цвет контура (почти черный для контраста)
+    OutlineTransparency = 0.1, -- Прозрачность контура
+    OutlineThickness = 6, -- Толщина контура
+    UpdateInterval = 0.1, -- Интервал обновления (в секундах)
+    MaxDistance = 1000 -- Максимальная дистанция видимости
+}
+
+-- Таблица для хранения данных ESP
+local ESPData = {}
+
+-- Функция для создания BillboardGui для игрока
+local function CreateBoxESP(Player)
+    if Player == LocalPlayer or not Player.Character then
+        return
+    end
+
+    -- Проверка команды, если включен TeamCheck
+    if ESPConfig.TeamCheck and Player.Team == LocalPlayer.Team then
+        return
+    end
+
+    -- Создаем BillboardGui
+    local Billboard = Instance.new("BillboardGui")
+    Billboard.Name = "ESP_Box"
+    Billboard.Adornee = Player.Character:FindFirstChild("HumanoidRootPart")
+    Billboard.Size = UDim2.new(4, 0, 6, 0) -- Размер бокса
+    Billboard.StudsOffset = Vector3.new(0, 0, 0)
+    Billboard.AlwaysOnTop = true
+    Billboard.MaxDistance = ESPConfig.MaxDistance
+    Billboard.Parent = Player.Character
+
+    -- Создаем Frame для контура (если включен)
+    local OutlineFrame = nil
+    local OutlineStroke = nil
+    if ESPConfig.OutlineEnabled then
+        OutlineFrame = Instance.new("Frame")
+        OutlineFrame.Size = UDim2.new(1, 4, 1, 4) -- Чуть больше основного бокса
+        OutlineFrame.Position = UDim2.new(0, -2, 0, -2) -- Смещение для центрирования
+        OutlineFrame.BackgroundTransparency = 1
+        OutlineFrame.BorderSizePixel = 0
+        OutlineFrame.Parent = Billboard
+
+        OutlineStroke = Instance.new("UIStroke")
+        OutlineStroke.Color = ESPConfig.OutlineColor
+        OutlineStroke.Thickness = ESPConfig.OutlineThickness
+        OutlineStroke.Transparency = ESPConfig.OutlineTransparency
+        OutlineStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        OutlineStroke.Parent = OutlineFrame
+    end
+
+    -- Создаем Frame для основного бокса
+    local BoxFrame = Instance.new("Frame")
+    BoxFrame.Size = UDim2.new(1, 0, 1, 0)
+    BoxFrame.BackgroundTransparency = 1
+    BoxFrame.BorderSizePixel = 0
+    BoxFrame.Parent = Billboard
+
+    -- Создаем UIStroke для основного бокса
+    local BoxStroke = Instance.new("UIStroke")
+    BoxStroke.Color = ESPConfig.BoxColor
+    BoxStroke.Thickness = 2.5
+    BoxStroke.Transparency = ESPConfig.BoxTransparency
+    BoxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    BoxStroke.Parent = BoxFrame
+
+    -- Сохраняем данные в таблицу
+    ESPData[Player] = {
+        Billboard = Billboard,
+        BoxFrame = BoxFrame,
+        BoxStroke = BoxStroke,
+        OutlineFrame = OutlineFrame,
+        OutlineStroke = OutlineStroke
+    }
+end
+
+-- Функция для удаления ESP для игрока
+local function RemoveBoxESP(Player)
+    if ESPData[Player] then
+        ESPData[Player].Billboard:Destroy()
+        ESPData[Player] = nil
+    end
+end
+
+-- Функция для обновления ESP
+local function UpdateESP()
+    if not ESPConfig.Enabled then
+        return
+    end
+
+    for Player, Data in pairs(ESPData) do
+        if not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") then
+            RemoveBoxESP(Player)
+        else
+            -- Обновляем позицию и видимость
+            Data.Billboard.Adornee = Player.Character.HumanoidRootPart
+            Data.BoxStroke.Color = ESPConfig.BoxColor
+            Data.BoxStroke.Transparency = ESPConfig.BoxTransparency
+
+            -- Обновляем контур
+            if ESPConfig.OutlineEnabled then
+                if not Data.OutlineFrame then
+                    Data.OutlineFrame = Instance.new("Frame")
+                    Data.OutlineFrame.Size = UDim2.new(1, 4, 1, 4)
+                    Data.OutlineFrame.Position = UDim2.new(0, -2, 0, -2)
+                    Data.OutlineFrame.BackgroundTransparency = 1
+                    Data.OutlineFrame.BorderSizePixel = 0
+                    Data.OutlineFrame.Parent = Data.Billboard
+
+                    Data.OutlineStroke = Instance.new("UIStroke")
+                    Data.OutlineStroke.Color = ESPConfig.OutlineColor
+                    Data.OutlineStroke.Thickness = ESPConfig.OutlineThickness
+                    Data.OutlineStroke.Transparency = ESPConfig.OutlineTransparency
+                    Data.OutlineStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                    Data.OutlineStroke.Parent = Data.OutlineFrame
+                else
+                    Data.OutlineStroke.Color = ESPConfig.OutlineColor
+                    Data.OutlineStroke.Transparency = ESPConfig.OutlineTransparency
+                    Data.OutlineStroke.Thickness = ESPConfig.OutlineThickness
+                end
+            elseif Data.OutlineFrame then
+                Data.OutlineFrame:Destroy()
+                Data.OutlineFrame = nil
+                Data.OutlineStroke = nil
+            end
+
+            -- Проверка дистанции
+            local Distance = (LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart.Position - Player.Character.HumanoidRootPart.Position).Magnitude
+            Data.Billboard.Enabled = Distance <= ESPConfig.MaxDistance
+        end
+    end
+end
+
+-- Инициализация ESP для существующих игроков
+local function InitializeESP()
+    for _, Player in pairs(Players:GetPlayers()) do
+        if Player ~= LocalPlayer then
+            CreateBoxESP(Player)
+        end
+    end
+end
+
+-- Обработчик подключения нового игрока
+Players.PlayerAdded:Connect(function(Player)
+    if Player ~= LocalPlayer then
+        Player.CharacterAdded:Connect(function()
+            CreateBoxESP(Player)
+        end)
+    end
+end)
+
+-- Обработчик ухода игрока
+Players.PlayerRemoving:Connect(function(Player)
+    RemoveBoxESP(Player)
+end)
+
+-- Обновление ESP с интервалом
+local UpdateTimer = 0
+RunService.Heartbeat:Connect(function(DeltaTime)
+    if not ESPConfig.Enabled then
+        return
+    end
+
+    UpdateTimer = UpdateTimer + DeltaTime
+    if UpdateTimer >= ESPConfig.UpdateInterval then
+        UpdateESP()
+        UpdateTimer = 0
+    end
+end)
+
+-- Инициализация
+InitializeESP()
+
+-- Функции для управления ESP
+local function ToggleESP()
+    ESPConfig.Enabled = not ESPConfig.Enabled
+    if not ESPConfig.Enabled then
+        for Player, Data in pairs(ESPData) do
+            Data.Billboard.Enabled = false
+        end
+    end
+end
+
+local function SetBoxColor(NewColor)
+    ESPConfig.BoxColor = NewColor
+end
+
+local function SetTeamCheck(Enabled)
+    ESPConfig.TeamCheck = Enabled
+    for Player, _ in pairs(ESPData) do
+        RemoveBoxESP(Player)
+    end
+    InitializeESP()
+end
+
+local function ToggleOutline()
+    ESPConfig.OutlineEnabled = not ESPConfig.OutlineEnabled
+end
+
+local function SetOutlineColor(NewColor)
+    ESPConfig.OutlineColor = NewColor
+end
+
+local function SetOutlineThickness(Thickness)
+    ESPConfig.OutlineThickness = Thickness
+end
+
+-- Экспортируем функции для использования в executor
+return {
+    ToggleESP = ToggleESP,
+    SetBoxColor = SetBoxColor,
+    SetTeamCheck = SetTeamCheck,
+    ToggleOutline = ToggleOutline,
+    SetOutlineColor = SetOutlineColor,
+    SetOutlineThickness = SetOutlineThickness
+}
