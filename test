@@ -4166,44 +4166,36 @@ local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 local camera = workspace.CurrentCamera
 
--- Function to find ground under character using raycasting
-local function findGround(currentPosition)
-local ray = Ray.new(currentPosition, Vector3.new(0, -JUMP_CANCEL_CONFIG.MaxDistance, 0))
-local hit, position = workspace:FindPartOnRayWithIgnoreList(ray, {character})
-if hit then
-return position.Y + humanoid.HipHeight
-else
-return nil
-end
+local function findGround(currentPosition, character, humanoid)
+    local direction = Vector3.new(0, -JUMP_CANCEL_CONFIG.MaxDistance, 0)
+    local hit, position = workspace:FindPartOnRayWithIgnoreList(Ray.new(currentPosition, direction), {character})
+    return hit and (position.Y + humanoid.HipHeight) or nil
 end
 
--- Function to teleport to ground
-local function teleportToGround(foundPosition)
-local cameraCFrame = camera.CFrame
-local lookDirection = cameraCFrame.LookVector
-local flatLookDirection = Vector3.new(lookDirection.X, 0, lookDirection.Z).Unit
-
-local currentPosition = rootPart.Position
-local newPosition = Vector3.new(currentPosition.X, foundPosition, currentPosition.Z)
-local newCFrame = CFrame.new(newPosition, newPosition + flatLookDirection)
-
-rootPart.CFrame = newCFrame
-humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+local function teleportToGround(foundPosition, rootPart, camera)
+    local cameraCFrame = camera.CFrame
+    local lookDirection = cameraCFrame.LookVector
+    local flatLookDirection = Vector3.new(lookDirection.X, 0, lookDirection.Z).Unit
+    local currentPosition = rootPart.Position
+    local newPosition = Vector3.new(currentPosition.X, foundPosition, currentPosition.Z)
+    local newCFrame = CFrame.new(newPosition, newPosition + flatLookDirection)
+    rootPart.CFrame = newCFrame
+    humanoid:ChangeState(Enum.HumanoidStateType.Landed)
 end
 
--- Function to cancel jump
-local function cancelJump()
-if not JUMP_CANCEL_CONFIG.Enabled then return end
-if humanoid:GetState() == Enum.HumanoidStateType.Jumping or humanoid:GetState() == Enum.HumanoidStateType.Freefall then
-local currentPosition = rootPart.Position
-local foundPosition = findGround(currentPosition)
-if foundPosition then
-teleportToGround(foundPosition)
-if JUMP_CANCEL_CONFIG.ShowNotifications then
-Library:Notify("Jump Canceled!", 2)
-end
-end
-end
+-- Обновляем вызов в cancelJump
+local function cancelJump(character, humanoid, rootPart)
+    if not JUMP_CANCEL_CONFIG.Enabled then return end
+    if humanoid:GetState() == Enum.HumanoidStateType.Jumping or humanoid:GetState() == Enum.HumanoidStateType.Freefall then
+        local currentPosition = rootPart.Position
+        local foundPosition = findGround(currentPosition, character, humanoid)
+        if foundPosition then
+            teleportToGround(foundPosition, rootPart, camera)
+            if JUMP_CANCEL_CONFIG.ShowNotifications then
+                Library:Notify("Jump Canceled!", 2)
+            end
+        end
+    end
 end
 
 -- Function to check if someone is aiming at the local player
