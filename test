@@ -3684,11 +3684,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 Time = 2
             })
             if Settings.ConsoleLogger.LogTypes.TargetHookedLog then
-                local time = os.date("%H:%M:%S")
-                console.addLog(string.format(
-                    'TargetHookedLog: Name: <font color="rgb(0,255,0)">%s</font>, Time: %s, Status: Unhooked',
-                    target.Name, time
-                ))
+                -- ... (логика логов) ...
             end
             if healthLogConnection then
                 healthLogConnection:Disconnect()
@@ -3705,6 +3701,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
             tracerParticles.Enabled = false
             jumpTime = 0
             targetState = "Ground"
+            if targetStatsGui then
+                targetStatsGui:Update(nil, 0) -- Сброс GUI
+            end
         end
     end
 end)
@@ -3752,8 +3751,11 @@ local function setupCharacter(newCharacter)
                 if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
                     local targetRoot = target.Character.HumanoidRootPart
                     local predictedPos = predictPosition(targetRoot, target.Character.Humanoid)
-                    if ReplicatedStorage:FindFirstChild("MainEvent") then
-                    ReplicatedStorage.MainEvent:FireServer("UpdateMousePos", predictedPos)
+                    local mainEvent = game:GetService("ReplicatedStorage"):FindFirstChild("MainEvent")
+                    if mainEvent then
+                        mainEvent:FireServer("UpdateMousePos", predictedPos)
+                    else
+                        warn("MainEvent not found in ReplicatedStorage. Silent Aim may not work correctly.")
                     end
                     local info = getTargetInfo(target)
                     printTargetInfo(info)
@@ -4123,6 +4125,144 @@ SilentAimGroup:AddToggle("SilentAimLogTargetHooked", {
         Settings.ConsoleLogger.LogTypes.TargetHookedLog = Value
     end
 })
+
+-- Add Jump Cancel groupbox and settings to Movement tab
+local JumpCancelGroup = Tabs.Movement:AddLeftGroupbox("Jump Cancel")
+
+-- Jump Cancel Config (extended with notifications)
+local JUMP_CANCEL_CONFIG = {
+MaxDistance = 1000, -- Maximum distance for ground detection
+Enabled = true,     -- Automatic jump cancel when targeted
+ShowNotifications = false -- Toggle for showing notifications
+}
+
+-- Jump Cancel Toggle
+JumpCancelGroup:AddToggle("JumpCancelToggle", {
+Text = "Jump Cancel",
+Default = JUMP_CANCEL_CONFIG.Enabled,
+Callback = function(Value)
+JUMP_CANCEL_CONFIG.Enabled = Value
+end
+})
+
+-- Show Notifications Toggle
+JumpCancelGroup:AddToggle("ShowNotificationsToggle", {
+Text = "Show Notifications",
+Default = JUMP_CANCEL_CONFIG.ShowNotifications,
+Callback = function(Value)
+JUMP_CANCEL_CONFIG.ShowNotifications = Value
+end
+})
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+-- Local player
+local localPlayer = Players.LocalPlayer
+local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local rootPart = character:WaitForChild("HumanoidRootPart")
+local camera = workspace.CurrentCamera
+
+-- Function to find ground under character using raycasting
+local function findGround(currentPosition)
+local ray = Ray.new(currentPosition, Vector3.new(0, -JUMP_CANCEL_CONFIG.MaxDistance, 0))
+local hit, position = workspace:FindPartOnRayWithIgnoreList(ray, {character})
+if hit then
+return position.Y + humanoid.HipHeight
+else
+return nil
+end
+end
+
+-- Function to teleport to ground
+local function teleportToGround(foundPosition)
+local cameraCFrame = camera.CFrame
+local lookDirection = cameraCFrame.LookVector
+local flatLookDirection = Vector3.new(lookDirection.X, 0, lookDirection.Z).Unit
+
+local currentPosition = rootPart.Position
+local newPosition = Vector3.new(currentPosition.X, foundPosition, currentPosition.Z)
+local newCFrame = CFrame.new(newPosition, newPosition + flatLookDirection)
+
+rootPart.CFrame = newCFrame
+humanoid:ChangeState(Enum.HumanoidStateType.Landed)
+end
+
+-- Function to cancel jump
+local function cancelJump()
+if not JUMP_CANCEL_CONFIG.Enabled then return end
+if humanoid:GetState() == Enum.HumanoidStateType.Jumping or humanoid:GetState() == Enum.HumanoidStateType.Freefall then
+local currentPosition = rootPart.Position
+local foundPosition = findGround(currentPosition)
+if foundPosition then
+teleportToGround(foundPosition)
+if JUMP_CANCEL_CONFIG.ShowNotifications then
+Library:Notify("Jump Canceled!", 2)
+end
+end
+end
+end
+
+-- Function to check if someone is aiming at the local player
+local function isAimingAtLocalPlayer(player)
+if not player.Character or not localPlayer.Character then
+return false
+end
+
+local targetChar = player.Character
+local localChar = localPlayer.Character
+
+if not targetChar:FindFirstChild("BodyEffects") or not targetChar:FindFirstChild("Head") then
+return false
+end
+
+local aimPos = targetChar.BodyEffects.MousePos.Value
+local localHeadPos = localChar:FindFirstChild("Head") and localChar.Head.Position
+
+if not localHeadPos then
+return false
+end
+
+local distance = (aimPos - localHeadPos).Magnitude
+local aimThreshold = 5
+
+return distance < aimThreshold
+end
+
+-- Main loop
+RunService.Heartbeat:Connect(function()
+if not localPlayer.Character then
+return
+end
+
+local anyoneAiming = false
+for _, player in ipairs(Players:GetPlayers()) do
+if player ~= localPlayer and player.Character then
+if isAimingAtLocalPlayer(player) then
+anyoneAiming = true
+break
+end
+end
+end
+if anyoneAiming and (humanoid:GetState() == Enum.HumanoidStateType.Jumping or humanoid:GetState() == Enum.HumanoidStateType.Freefall) then
+cancelJump()
+end
+end)
+
+-- Update character on respawn
+localPlayer.CharacterAdded:Connect(function(newCharacter)
+character = newCharacter
+humanoid = character:WaitForChild("Humanoid")
+rootPart = character:WaitForChild("HumanoidRootPart")
+end)
+
+-- Update camera
+RunService.RenderStepped:Connect(function()
+camera = workspace.CurrentCamera
+end)
 
 -- Setup ThemeManager and SaveManager
 ThemeManager:SetLibrary(Library)
