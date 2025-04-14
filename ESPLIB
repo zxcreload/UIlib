@@ -3,53 +3,69 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- Конфигурация ESP
+-- Конфигурация ESP (боксы)
 local ESPConfig = {
     Enabled = true, -- Включен ли ESP
     TeamCheck = false, -- Проверять ли команду
     BoxColor = Color3.fromRGB(255, 255, 255), -- Основной цвет боксов (белый)
     BoxTransparency = 0.3, -- Прозрачность боксов
     OutlineEnabled = true, -- Включен ли контур
-    OutlineColor = Color3.fromRGB(30, 30, 30), -- Цвет контура (почти черный для контраста)
+    OutlineColor = Color3.fromRGB(30, 30, 30), -- Цвет контура
     OutlineTransparency = 0.1, -- Прозрачность контура
-    OutlineThickness = 6, -- Толщина контура
+    OutlineThickness = 3, -- Толщина контура
+    BoxWidth = 4, -- Ширина бокса (в UDim)
+    BoxHeight = 6, -- Высота бокса (в UDim)
     UpdateInterval = 0.1, -- Интервал обновления (в секундах)
     MaxDistance = 1000 -- Максимальная дистанция видимости
 }
 
--- Таблица для хранения данных ESP
-local ESPData = {}
+-- Конфигурация Healthbar
+local HealthbarConfig = {
+    Enabled = true, -- Включен ли Healthbar
+    TeamCheck = false, -- Проверять ли команду
+    Type = "Right", -- Тип расположения: Left, Right, Top, Down
+    BarColor = Color3.fromRGB(0, 255, 0), -- Цвет заполнения полосы
+    BackgroundColor = Color3.fromRGB(50, 50, 50), -- Цвет фона полосы
+    BarTransparency = 0.2, -- Прозрачность полосы
+    BackgroundTransparency = 0.5, -- Прозрачность фона
+    WidthRatio = 0.1, -- Ширина полосы относительно бокса (для Left/Right — ширина, для Top/Down — высота)
+    Offset = 0.5, -- Дополнительное смещение от бокса (в UDim)
+    UpdateInterval = 0.1, -- Интервал обновления
+    MaxDistance = 1000 -- Максимальная дистанция видимости
+}
 
--- Функция для создания BillboardGui для игрока
+-- Таблицы для хранения данных
+local ESPData = {} -- Для боксов
+local HealthbarData = {} -- Для Healthbar
+
+-- Функция для создания ESP бокса
 local function CreateBoxESP(Player)
     if Player == LocalPlayer or not Player.Character then
         return
     end
 
-    -- Проверка команды, если включен TeamCheck
     if ESPConfig.TeamCheck and Player.Team == LocalPlayer.Team then
         return
     end
 
-    -- Создаем BillboardGui
     local Billboard = Instance.new("BillboardGui")
     Billboard.Name = "ESP_Box"
     Billboard.Adornee = Player.Character:FindFirstChild("HumanoidRootPart")
-    Billboard.Size = UDim2.new(4, 0, 6, 0) -- Размер бокса
+    Billboard.Size = UDim2.new(ESPConfig.BoxWidth, 0, ESPConfig.BoxHeight, 0)
     Billboard.StudsOffset = Vector3.new(0, 0, 0)
     Billboard.AlwaysOnTop = true
     Billboard.MaxDistance = ESPConfig.MaxDistance
     Billboard.Parent = Player.Character
 
-    -- Создаем Frame для контура (если включен)
     local OutlineFrame = nil
     local OutlineStroke = nil
     if ESPConfig.OutlineEnabled then
         OutlineFrame = Instance.new("Frame")
-        OutlineFrame.Size = UDim2.new(1, 4, 1, 4) -- Чуть больше основного бокса
-        OutlineFrame.Position = UDim2.new(0, -2, 0, -2) -- Смещение для центрирования
+        OutlineFrame.Size = UDim2.new(1, 2, 1, 2)
+        OutlineFrame.Position = UDim2.new(0, -1, 0, -1)
         OutlineFrame.BackgroundTransparency = 1
         OutlineFrame.BorderSizePixel = 0
+        OutlineFrame.ZIndex = 1
         OutlineFrame.Parent = Billboard
 
         OutlineStroke = Instance.new("UIStroke")
@@ -60,22 +76,20 @@ local function CreateBoxESP(Player)
         OutlineStroke.Parent = OutlineFrame
     end
 
-    -- Создаем Frame для основного бокса
     local BoxFrame = Instance.new("Frame")
     BoxFrame.Size = UDim2.new(1, 0, 1, 0)
     BoxFrame.BackgroundTransparency = 1
     BoxFrame.BorderSizePixel = 0
+    BoxFrame.ZIndex = 2
     BoxFrame.Parent = Billboard
 
-    -- Создаем UIStroke для основного бокса
     local BoxStroke = Instance.new("UIStroke")
     BoxStroke.Color = ESPConfig.BoxColor
-    BoxStroke.Thickness = 2.5
+    BoxStroke.Thickness = 2
     BoxStroke.Transparency = ESPConfig.BoxTransparency
     BoxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     BoxStroke.Parent = BoxFrame
 
-    -- Сохраняем данные в таблицу
     ESPData[Player] = {
         Billboard = Billboard,
         BoxFrame = BoxFrame,
@@ -85,11 +99,91 @@ local function CreateBoxESP(Player)
     }
 end
 
--- Функция для удаления ESP для игрока
+-- Функция для создания Healthbar
+local function CreateHealthbar(Player)
+    if Player == LocalPlayer or not Player.Character or not Player.Character:FindFirstChild("Humanoid") then
+        return
+    end
+
+    if HealthbarConfig.TeamCheck and Player.Team == LocalPlayer.Team then
+        return
+    end
+
+    local Billboard = Instance.new("BillboardGui")
+    Billboard.Name = "Healthbar"
+    Billboard.Adornee = Player.Character:FindFirstChild("HumanoidRootPart")
+    Billboard.AlwaysOnTop = true
+    Billboard.MaxDistance = HealthbarConfig.MaxDistance
+    Billboard.Parent = Player.Character
+
+    -- Определяем размер и позицию в зависимости от типа
+    local BarSize, BarOffset, IsVertical
+    if HealthbarConfig.Type == "Left" or HealthbarConfig.Type == "Right" then
+        -- Для Left/Right: ширина пропорциональна ширине бокса, высота равна высоте бокса
+        BarSize = UDim2.new(ESPConfig.BoxWidth * HealthbarConfig.WidthRatio, 0, ESPConfig.BoxHeight, 0)
+        IsVertical = true
+    else -- Top or Down
+        -- Для Top/Down: ширина равна ширине бокса, высота пропорциональна ширине бокса
+        BarSize = UDim2.new(ESPConfig.BoxWidth, 0, ESPConfig.BoxWidth * HealthbarConfig.WidthRatio, 0)
+        IsVertical = false
+    end
+
+    -- Смещение BillboardGui для корректного позиционирования
+    if HealthbarConfig.Type == "Left" then
+        Billboard.StudsOffset = Vector3.new(-(ESPConfig.BoxWidth / 2 + (ESPConfig.BoxWidth * HealthbarConfig.WidthRatio) / 2 + HealthbarConfig.Offset), 0, 0)
+        BarOffset = UDim2.new(0, 0, 0, 0)
+    elseif HealthbarConfig.Type == "Right" then
+        Billboard.StudsOffset = Vector3.new(ESPConfig.BoxWidth / 2 + (ESPConfig.BoxWidth * HealthbarConfig.WidthRatio) / 2 + HealthbarConfig.Offset, 0, 0)
+        BarOffset = UDim2.new(0, 0, 0, 0)
+    elseif HealthbarConfig.Type == "Top" then
+        Billboard.StudsOffset = Vector3.new(0, ESPConfig.BoxHeight / 2 + (ESPConfig.BoxWidth * HealthbarConfig.WidthRatio) / 2 + HealthbarConfig.Offset, 0)
+        BarOffset = UDim2.new(0, 0, 0, 0)
+    else -- Down
+        Billboard.StudsOffset = Vector3.new(0, -(ESPConfig.BoxHeight / 2 + (ESPConfig.BoxWidth * HealthbarConfig.WidthRatio) / 2 + HealthbarConfig.Offset), 0)
+        BarOffset = UDim2.new(0, 0, 0, 0)
+    end
+
+    Billboard.Size = BarSize
+
+    -- Фон полосы
+    local BackgroundFrame = Instance.new("Frame")
+    BackgroundFrame.Size = UDim2.new(1, 0, 1, 0)
+    BackgroundFrame.Position = BarOffset
+    BackgroundFrame.BackgroundColor3 = HealthbarConfig.BackgroundColor
+    BackgroundFrame.BackgroundTransparency = HealthbarConfig.BackgroundTransparency
+    BackgroundFrame.BorderSizePixel = 0
+    BackgroundFrame.Parent = Billboard
+
+    -- Полоса здоровья
+    local HealthFrame = Instance.new("Frame")
+    HealthFrame.Size = IsVertical and UDim2.new(1, 0, 1, 0) or UDim2.new(1, 0, 1, 0)
+    HealthFrame.BackgroundColor3 = HealthbarConfig.BarColor
+    HealthFrame.BackgroundTransparency = HealthbarConfig.BarTransparency
+    HealthFrame.BorderSizePixel = 0
+    HealthFrame.Parent = BackgroundFrame
+
+    HealthbarData[Player] = {
+        Billboard = Billboard,
+        BackgroundFrame = BackgroundFrame,
+        HealthFrame = HealthFrame,
+        Humanoid = Player.Character.Humanoid,
+        IsVertical = IsVertical
+    }
+end
+
+-- Функция для удаления ESP
 local function RemoveBoxESP(Player)
     if ESPData[Player] then
         ESPData[Player].Billboard:Destroy()
         ESPData[Player] = nil
+    end
+end
+
+-- Функция для удаления Healthbar
+local function RemoveHealthbar(Player)
+    if HealthbarData[Player] then
+        HealthbarData[Player].Billboard:Destroy()
+        HealthbarData[Player] = nil
     end
 end
 
@@ -103,19 +197,19 @@ local function UpdateESP()
         if not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") then
             RemoveBoxESP(Player)
         else
-            -- Обновляем позицию и видимость
             Data.Billboard.Adornee = Player.Character.HumanoidRootPart
             Data.BoxStroke.Color = ESPConfig.BoxColor
+            Data.BoxStroke.Thickness = 2
             Data.BoxStroke.Transparency = ESPConfig.BoxTransparency
 
-            -- Обновляем контур
             if ESPConfig.OutlineEnabled then
                 if not Data.OutlineFrame then
                     Data.OutlineFrame = Instance.new("Frame")
-                    Data.OutlineFrame.Size = UDim2.new(1, 4, 1, 4)
-                    Data.OutlineFrame.Position = UDim2.new(0, -2, 0, -2)
+                    Data.OutlineFrame.Size = UDim2.new(1, 2, 1, 2)
+                    Data.OutlineFrame.Position = UDim2.new(0, -1, 0, -1)
                     Data.OutlineFrame.BackgroundTransparency = 1
                     Data.OutlineFrame.BorderSizePixel = 0
+                    Data.OutlineFrame.ZIndex = 1
                     Data.OutlineFrame.Parent = Data.Billboard
 
                     Data.OutlineStroke = Instance.new("UIStroke")
@@ -135,18 +229,57 @@ local function UpdateESP()
                 Data.OutlineStroke = nil
             end
 
-            -- Проверка дистанции
             local Distance = (LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart.Position - Player.Character.HumanoidRootPart.Position).Magnitude
             Data.Billboard.Enabled = Distance <= ESPConfig.MaxDistance
         end
     end
 end
 
--- Инициализация ESP для существующих игроков
+-- Функция для обновления Healthbar
+local function UpdateHealthbar()
+    if not HealthbarConfig.Enabled then
+        return
+    end
+
+    for Player, Data in pairs(HealthbarData) do
+        if not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") or not Player.Character:FindFirstChild("Humanoid") then
+            RemoveHealthbar(Player)
+        else
+            Data.Billboard.Adornee = Player.Character.HumanoidRootPart
+            Data.BackgroundFrame.BackgroundColor3 = HealthbarConfig.BackgroundColor
+            Data.BackgroundFrame.BackgroundTransparency = HealthbarConfig.BackgroundTransparency
+            Data.HealthFrame.BackgroundColor3 = HealthbarConfig.BarColor
+            Data.HealthFrame.BackgroundTransparency = HealthbarConfig.BarTransparency
+
+            -- Обновляем размер полосы в зависимости от здоровья
+            local HealthFraction = Data.Humanoid.Health / Data.Humanoid.MaxHealth
+            if Data.IsVertical then
+                Data.HealthFrame.Size = UDim2.new(1, 0, HealthFraction, 0)
+                Data.HealthFrame.Position = UDim2.new(0, 0, 1 - HealthFraction, 0)
+            else
+                Data.HealthFrame.Size = UDim2.new(HealthFraction, 0, 1, 0)
+            end
+
+            local Distance = (LocalPlayer.Character and LocalPlayer.Character.HumanoidRootPart.Position - Player.Character.HumanoidRootPart.Position).Magnitude
+            Data.Billboard.Enabled = Distance <= HealthbarConfig.MaxDistance
+        end
+    end
+end
+
+-- Инициализация ESP
 local function InitializeESP()
     for _, Player in pairs(Players:GetPlayers()) do
         if Player ~= LocalPlayer then
             CreateBoxESP(Player)
+        end
+    end
+end
+
+-- Инициализация Healthbar
+local function InitializeHealthbar()
+    for _, Player in pairs(Players:GetPlayers()) do
+        if Player ~= LocalPlayer then
+            CreateHealthbar(Player)
         end
     end
 end
@@ -156,6 +289,7 @@ Players.PlayerAdded:Connect(function(Player)
     if Player ~= LocalPlayer then
         Player.CharacterAdded:Connect(function()
             CreateBoxESP(Player)
+            CreateHealthbar(Player)
         end)
     end
 end)
@@ -163,24 +297,27 @@ end)
 -- Обработчик ухода игрока
 Players.PlayerRemoving:Connect(function(Player)
     RemoveBoxESP(Player)
+    RemoveHealthbar(Player)
 end)
 
--- Обновление ESP с интервалом
+-- Обновление с интервалом
 local UpdateTimer = 0
 RunService.Heartbeat:Connect(function(DeltaTime)
-    if not ESPConfig.Enabled then
-        return
-    end
-
     UpdateTimer = UpdateTimer + DeltaTime
-    if UpdateTimer >= ESPConfig.UpdateInterval then
-        UpdateESP()
+    if UpdateTimer >= math.min(ESPConfig.UpdateInterval, HealthbarConfig.UpdateInterval) then
+        if ESPConfig.Enabled then
+            UpdateESP()
+        end
+        if HealthbarConfig.Enabled then
+            UpdateHealthbar()
+        end
         UpdateTimer = 0
     end
 end)
 
 -- Инициализация
 InitializeESP()
+InitializeHealthbar()
 
 -- Функции для управления ESP
 local function ToggleESP()
@@ -216,12 +353,88 @@ local function SetOutlineThickness(Thickness)
     ESPConfig.OutlineThickness = Thickness
 end
 
--- Экспортируем функции для использования в executor
+local function SetBoxSize(Width, Height)
+    ESPConfig.BoxWidth = Width
+    ESPConfig.BoxHeight = Height
+    for Player, _ in pairs(ESPData) do
+        RemoveBoxESP(Player)
+    end
+    for Player, _ in pairs(HealthbarData) do
+        RemoveHealthbar(Player)
+    end
+    InitializeESP()
+    InitializeHealthbar()
+end
+
+-- Функции для управления Healthbar
+local function ToggleHealthbar()
+    HealthbarConfig.Enabled = not HealthbarConfig.Enabled
+    if not HealthbarConfig.Enabled then
+        for Player, Data in pairs(HealthbarData) do
+            Data.Billboard.Enabled = false
+        end
+    end
+end
+
+local function SetHealthbarType(Type)
+    if not table.find({"Left", "Right", "Top", "Down"}, Type) then
+        return
+    end
+    HealthbarConfig.Type = Type
+    for Player, _ in pairs(HealthbarData) do
+        RemoveHealthbar(Player)
+    end
+    InitializeHealthbar()
+end
+
+local function SetHealthbarColor(NewColor)
+    HealthbarConfig.BarColor = NewColor
+end
+
+local function SetHealthbarBackgroundColor(NewColor)
+    HealthbarConfig.BackgroundColor = NewColor
+end
+
+local function SetHealthbarTeamCheck(Enabled)
+    HealthbarConfig.TeamCheck = Enabled
+    for Player, _ in pairs(HealthbarData) do
+        RemoveHealthbar(Player)
+    end
+    InitializeHealthbar()
+end
+
+local function SetHealthbarOffset(Offset)
+    HealthbarConfig.Offset = Offset
+    for Player, _ in pairs(HealthbarData) do
+        RemoveHealthbar(Player)
+    end
+    InitializeHealthbar()
+end
+
+local function SetHealthbarWidthRatio(Ratio)
+    HealthbarConfig.WidthRatio = Ratio
+    for Player, _ in pairs(HealthbarData) do
+        RemoveHealthbar(Player)
+    end
+    InitializeHealthbar()
+end
+
+-- Экспортируем функции
 return {
+    -- ESP функции
     ToggleESP = ToggleESP,
     SetBoxColor = SetBoxColor,
     SetTeamCheck = SetTeamCheck,
     ToggleOutline = ToggleOutline,
     SetOutlineColor = SetOutlineColor,
-    SetOutlineThickness = SetOutlineThickness
+    SetOutlineThickness = SetOutlineThickness,
+    SetBoxSize = SetBoxSize,
+    -- Healthbar функции
+    ToggleHealthbar = ToggleHealthbar,
+    SetHealthbarType = SetHealthbarType,
+    SetHealthbarColor = SetHealthbarColor,
+    SetHealthbarBackgroundColor = SetHealthbarBackgroundColor,
+    SetHealthbarTeamCheck = SetHealthbarTeamCheck,
+    SetHealthbarOffset = SetHealthbarOffset,
+    SetHealthbarWidthRatio = SetHealthbarWidthRatio
 }
