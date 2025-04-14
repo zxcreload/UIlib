@@ -4126,32 +4126,29 @@ SilentAimGroup:AddToggle("SilentAimLogTargetHooked", {
     end
 })
 
--- Add Jump Cancel groupbox and settings to Movement tab
-local JumpCancelGroup = Tabs.Movement:AddLeftGroupbox("Jump Cancel")
-
 -- Jump Cancel Config (extended with notifications)
 local JUMP_CANCEL_CONFIG = {
-MaxDistance = 1000, -- Maximum distance for ground detection
-Enabled = true,     -- Automatic jump cancel when targeted
-ShowNotifications = false -- Toggle for showing notifications
+    MaxDistance = 1000, -- Maximum distance for ground detection
+    Enabled = true,     -- Automatic jump cancel when targeted
+    ShowNotifications = false -- Toggle for showing notifications
 }
 
 -- Jump Cancel Toggle
 JumpCancelGroup:AddToggle("JumpCancelToggle", {
-Text = "Jump Cancel",
-Default = JUMP_CANCEL_CONFIG.Enabled,
-Callback = function(Value)
-JUMP_CANCEL_CONFIG.Enabled = Value
-end
+    Text = "Jump Cancel",
+    Default = JUMP_CANCEL_CONFIG.Enabled,
+    Callback = function(Value)
+        JUMP_CANCEL_CONFIG.Enabled = Value
+    end
 })
 
 -- Show Notifications Toggle
 JumpCancelGroup:AddToggle("ShowNotificationsToggle", {
-Text = "Show Notifications",
-Default = JUMP_CANCEL_CONFIG.ShowNotifications,
-Callback = function(Value)
-JUMP_CANCEL_CONFIG.ShowNotifications = Value
-end
+    Text = "Show Notifications",
+    Default = JUMP_CANCEL_CONFIG.ShowNotifications,
+    Callback = function(Value)
+        JUMP_CANCEL_CONFIG.ShowNotifications = Value
+    end
 })
 
 -- Services
@@ -4161,36 +4158,34 @@ local UserInputService = game:GetService("UserInputService")
 
 -- Local player
 local localPlayer = Players.LocalPlayer
-local character = localPlayer.Character or localPlayer.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local rootPart = character:WaitForChild("HumanoidRootPart")
 local camera = workspace.CurrentCamera
 
+-- Function to find ground under character using raycasting
 local function findGround(currentPosition, character, humanoid)
     local direction = Vector3.new(0, -JUMP_CANCEL_CONFIG.MaxDistance, 0)
     local hit, position = workspace:FindPartOnRayWithIgnoreList(Ray.new(currentPosition, direction), {character})
     return hit and (position.Y + humanoid.HipHeight) or nil
 end
 
+-- Function to teleport to ground
 local function teleportToGround(foundPosition, rootPart, camera)
-    local cameraCFrame = camera.CFrame
-    local lookDirection = cameraCFrame.LookVector
+    local lookDirection = camera.CFrame.LookVector
     local flatLookDirection = Vector3.new(lookDirection.X, 0, lookDirection.Z).Unit
     local currentPosition = rootPart.Position
     local newPosition = Vector3.new(currentPosition.X, foundPosition, currentPosition.Z)
     local newCFrame = CFrame.new(newPosition, newPosition + flatLookDirection)
     rootPart.CFrame = newCFrame
-    humanoid:ChangeState(Enum.HumanoidStateType.Landed)
 end
 
--- Обновляем вызов в cancelJump
-local function cancelJump(character, humanoid, rootPart)
+-- Function to cancel jump
+local function cancelJump(character, humanoid, rootPart, camera)
     if not JUMP_CANCEL_CONFIG.Enabled then return end
     if humanoid:GetState() == Enum.HumanoidStateType.Jumping or humanoid:GetState() == Enum.HumanoidStateType.Freefall then
         local currentPosition = rootPart.Position
         local foundPosition = findGround(currentPosition, character, humanoid)
         if foundPosition then
             teleportToGround(foundPosition, rootPart, camera)
+            humanoid:ChangeState(Enum.HumanoidStateType.Landed)
             if JUMP_CANCEL_CONFIG.ShowNotifications then
                 Library:Notify("Jump Canceled!", 2)
             end
@@ -4199,61 +4194,45 @@ local function cancelJump(character, humanoid, rootPart)
 end
 
 -- Function to check if someone is aiming at the local player
-local function isAimingAtLocalPlayer(player)
-if not player.Character or not localPlayer.Character then
-return false
-end
-
-local targetChar = player.Character
-local localChar = localPlayer.Character
-
-if not targetChar:FindFirstChild("BodyEffects") or not targetChar:FindFirstChild("Head") then
-return false
-end
-
-local aimPos = targetChar.BodyEffects.MousePos.Value
-local localHeadPos = localChar:FindFirstChild("Head") and localChar.Head.Position
-
-if not localHeadPos then
-return false
-end
-
-local distance = (aimPos - localHeadPos).Magnitude
-local aimThreshold = 5
-
-return distance < aimThreshold
+local function isAimingAtLocalPlayer(player, localChar)
+    if not player.Character or not localChar then return false end
+    local targetChar = player.Character
+    if not (targetChar:FindFirstChild("BodyEffects") and targetChar:FindFirstChild("Head")) then return false end
+    local aimPos = targetChar.BodyEffects:FindFirstChild("MousePos") and targetChar.BodyEffects.MousePos.Value
+    local localHeadPos = localChar:FindFirstChild("Head") and localChar.Head.Position
+    if not (aimPos and localHeadPos) then return false end
+    return (aimPos - localHeadPos).Magnitude < 5
 end
 
 -- Main loop
 RunService.Heartbeat:Connect(function()
-if not localPlayer.Character then
-return
-end
+    local character = localPlayer.Character
+    if not character then return end
 
-local anyoneAiming = false
-for _, player in ipairs(Players:GetPlayers()) do
-if player ~= localPlayer and player.Character then
-if isAimingAtLocalPlayer(player) then
-anyoneAiming = true
-break
-end
-end
-end
-if anyoneAiming and (humanoid:GetState() == Enum.HumanoidStateType.Jumping or humanoid:GetState() == Enum.HumanoidStateType.Freefall) then
-cancelJump()
-end
-end)
+    local humanoid = character:FindFirstChild("Humanoid")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not (humanoid and rootPart) then return end
 
--- Update character on respawn
-localPlayer.CharacterAdded:Connect(function(newCharacter)
-character = newCharacter
-humanoid = character:WaitForChild("Humanoid")
-rootPart = character:WaitForChild("HumanoidRootPart")
+    if not (humanoid:GetState() == Enum.HumanoidStateType.Jumping or humanoid:GetState() == Enum.HumanoidStateType.Freefall) then return end
+
+    local anyoneAiming = false
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= localPlayer and player.Character then
+            if isAimingAtLocalPlayer(player, character) then
+                anyoneAiming = true
+                break
+            end
+        end
+    end
+
+    if anyoneAiming then
+        cancelJump(character, humanoid, rootPart, camera)
+    end
 end)
 
 -- Update camera
 RunService.RenderStepped:Connect(function()
-camera = workspace.CurrentCamera
+    camera = workspace.CurrentCamera
 end)
 
 -- Setup ThemeManager and SaveManager
